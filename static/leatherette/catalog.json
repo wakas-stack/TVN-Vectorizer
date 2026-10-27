@@ -1,0 +1,238 @@
+{
+ "collection": "Heritage Collection Durra-Bull Premium Leatherette (Lone Star Adhesive)",
+ "source": "https://lonestaradhesive.com/collections/heritage-leatherette",
+ "sheets": [
+  {
+   "id": "buckskin-black",
+   "name": "Buckskin / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "buckskin",
+   "color": "#c38452"
+  },
+  {
+   "id": "walnut-black",
+   "name": "Walnut / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "walnut",
+   "color": "#83553b"
+  },
+  {
+   "id": "rawhide-black",
+   "name": "Rawhide / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "rawhide",
+   "color": "#ac6343"
+  },
+  {
+   "id": "bright-white-black",
+   "name": "Bright White / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "bright-white",
+   "color": "#fdfefc"
+  },
+  {
+   "id": "flint-black",
+   "name": "Flint / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "flint",
+   "color": "#9a9b93"
+  },
+  {
+   "id": "charcoal-black",
+   "name": "Charcoal / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "charcoal",
+   "color": "#60615c"
+  },
+  {
+   "id": "black-black",
+   "name": "Black / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "black",
+   "color": "#2d3133"
+  },
+  {
+   "id": "sand-black",
+   "name": "Sand / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "sand",
+   "color": "#b5a998"
+  },
+  {
+   "id": "black-silver",
+   "name": "Black / Silver",
+   "core": "Silver",
+   "core_hex": "#b9bcc0",
+   "texture": "black",
+   "color": "#2d3133"
+  },
+  {
+   "id": "glow-in-the-dark-black",
+   "name": "Glow-in-the-Dark / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "glow",
+   "color": "#d5d6d4"
+  },
+  {
+   "id": "primrose-black",
+   "name": "Primrose / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "primrose",
+   "color": "#ea4891"
+  },
+  {
+   "id": "olive-black",
+   "name": "Olive / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "olive",
+   "color": "#8b8b5e"
+  },
+  {
+   "id": "ruby-black",
+   "name": "Ruby / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "ruby",
+   "color": "#d22a3e"
+  },
+  {
+   "id": "indigo-black",
+   "name": "Indigo / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "indigo",
+   "color": "#496289"
+  },
+  {
+   "id": "saddle-tan-black",
+   "name": "Saddle Tan / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": null,
+   "color": "#c29a68"
+  },
+  {
+   "id": "black-gold",
+   "name": "Black / Gold",
+   "core": "Gold",
+   "core_hex": "#c8a24a",
+   "texture": "black",
+   "color": "#2d3133"
+  },
+  {
+   "id": "orange-black",
+   "name": "Orange / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "orange",
+   "color": "#c76a43"
+  },
+  {
+   "id": "black-copper",
+   "name": "Black / Copper",
+   "core": "Copper",
+   "core_hex": "#b5714a",
+   "texture": "black",
+   "color": "#2d3133"
+  },
+  {
+   "id": "yellow-black",
+   "name": "Yellow / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "yellow",
+   "color": "#e3d410"
+  },
+  {
+   "id": "violet-black",
+   "name": "Violet / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "violet",
+   "color": "#7b34b2"
+  },
+  {
+   "id": "maroon-black",
+   "name": "Maroon / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "maroon",
+   "color": "#9a2f48"
+  },
+  {
+   "id": "eggshell-black",
+   "name": "Eggshell / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "eggshell",
+   "color": "#d6d6d6"
+  },
+  {
+   "id": "seafoam-green-black",
+   "name": "Seafoam Green / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "seafoam",
+   "color": "#7bc9c0"
+  },
+  {
+   "id": "kelly-green-black",
+   "name": "Kelly Green / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "kelly-green",
+   "color": "#389e61"
+  },
+  {
+   "id": "sky-blue-black",
+   "name": "Sky Blue / Black",
+   "core": "Black",
+   "core_hex": "#1c1c1c",
+   "texture": "sky-blue",
+   "color": "#78caf0"
+  },
+  {
+   "id": "indigo-silver",
+   "name": "Indigo / Silver",
+   "core": "Silver",
+   "core_hex": "#b9bcc0",
+   "texture": "indigo",
+   "color": "#496289"
+  },
+  {
+   "id": "walnut-silver",
+   "name": "Walnut / Silver",
+   "core": "Silver",
+   "core_hex": "#b9bcc0",
+   "texture": "walnut",
+   "color": "#83553b"
+  },
+  {
+   "id": "walnut-gold",
+   "name": "Walnut / Gold",
+   "core": "Gold",
+   "core_hex": "#c8a24a",
+   "texture": "walnut",
+   "color": "#83553b"
+  },
+  {
+   "id": "indigo-gold",
+   "name": "Indigo / Gold",
+   "core": "Gold",
+   "core_hex": "#c8a24a",
+   "texture": "indigo",
+   "color": "#496289"
+  }
+ ]
+}

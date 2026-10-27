@@ -1,0 +1,31 @@
+.th-books { display: flex; gap: 6px 18px; flex-wrap: wrap; }
+.th-book { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.th-book .n { color: var(--muted); font-size: 12px; }
+.th-name { font-weight: 500; }
+
+.th-bests { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.th-best { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; font-size: 12.5px; line-height: 1.35; }
+.th-best .sw { width: 22px; height: 22px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .1); }
+.th-best b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.th-pms { margin-bottom: 16px; }
+.th-pms-results:not(:empty) { margin-top: 14px; }
+.th-pms-results .pm-group { grid-template-columns: 180px 1fr; }
+.th-pms-results .pm-yours .chip { height: 90px; }
+.th-pms-results .pm-note { font-size: 13px; color: var(--muted); margin: 0 0 10px; grid-column: 1 / -1; }
+.th-pms-results .nosw { background: repeating-linear-gradient(45deg, var(--line) 0 6px, transparent 6px 12px); }
+@media (max-width: 640px) { .th-pms-results .pm-group { grid-template-columns: 1fr; } }
+.th-pms h2 { font-size: 22px; margin: 0 0 6px; }
+
+.th-pms-box { position: relative; flex: 1; min-width: 200px; display: flex; }
+.th-pms-list { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: min(320px, 50vh); overflow-y: auto;
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 8px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgb(0 0 0 / .25); }
+.th-pms-list[hidden] { display: none; }
+.th-pms-list button { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px;
+  background: none; color: var(--ink); font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.th-pms-list button:hover, .th-pms-list button.on { background: var(--bg); border-color: var(--line); }
+.th-pms-list button.on { border-color: var(--accent); }
+.th-pms-list .sw { flex: none; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .15); }
+.th-pms-list .none { grid-column: 1 / -1; margin: 4px; color: var(--muted); font-size: 13px; }
+@media (max-width: 560px) { .th-pms-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

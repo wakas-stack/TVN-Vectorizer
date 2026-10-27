@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pantone Match</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/pantone.css">
+</head>
+<body class="pantone-page">
+<header class="top">
+  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
+  <nav class="nav">
+    <a href="/">Vectorizer</a>
+    <a href="/pantone" aria-current="page">Pantone match</a>
+    <a href="/thread">Thread match</a>
+    <a href="/patch">Patch mockup</a>
+  <a href="/gang">Gang sheet</a>
+  </nav>
+</header>
+
+<main class="pm">
+  <section class="pm-input">
+    <h1>Find the matching Pantone colour</h1>
+    <p class="sub">Enter a hex code (or several, separated by commas, spaces or new lines), or an RGB or CMYK colour.</p>
+    <div class="ci-modes" role="group" aria-label="Colour format"><button type="button" data-mode="hex" aria-pressed="true">Hex</button><button type="button" data-mode="rgb" aria-pressed="false">RGB</button><button type="button" data-mode="cmyk" aria-pressed="false">CMYK</button></div>
+    <div class="pm-row" id="hexRow">
+      <input id="hexInput" class="pm-hex" type="text" placeholder="#E4002B" autocomplete="off" spellcheck="false" aria-label="Hex colour codes">
+      <input id="picker" type="color" value="#e4002b" aria-label="Pick a colour">
+      <button id="eyedrop" type="button" title="Pick a colour from anywhere on screen" hidden>Eyedropper</button>
+    </div>
+    <div class="pm-row ci-fields" id="rgbRow" hidden><span class="ci-out"></span></div>
+    <div class="pm-row ci-fields" id="cmykRow" hidden><span class="ci-out"></span></div>
+    <p class="pm-error" id="err" hidden></p>
+    <div class="pm-row pm-options">
+      <details class="pm-books" id="booksBox">
+        <summary>Colour books: <span id="booksSummary">Solid Coated</span></summary>
+        <div id="books" class="pm-book-list"></div>
+        <div class="pm-row small"><button type="button" id="booksAll">All</button><button type="button" id="booksPrint">Print (C + U)</button></div>
+      </details>
+      <label class="pm-count">Show <select id="count"><option>5</option><option selected>8</option><option>12</option><option>20</option></select> matches</label>
+    </div>
+  </section>
+
+  <section id="results" class="pm-results"></section>
+
+  <section class="pm-help">
+    <h2>Reading the results</h2>
+    <p><b>RGB and CMYK</b> are turned into a screen colour before matching. CMYK is read as printed on coated paper with the <i>Coated FOGRA39</i> profile (ISO 12647-2, the usual standard for offset printing, and Adobe's default in Europe), and its printed Lab colour is matched. The hex shown is its screen colour. CMYK made for another press or paper (for example GRACoL or uncoated) can differ.</p>
+    <p><b>ΔE</b> is the CIEDE2000 colour difference between your colour and the Pantone colour.
+      Under 1 the eye sees no difference; under 2 only a trained eye sees one side by side; under 3.5 the difference is slight; above 5 it is a different colour.</p>
+    <p>Pantone colours are defined as printed ink, measured in CIE Lab. The hex code shown for each one is its nearest screen colour (sRGB); colours marked <i>outside screen range</i> are more saturated on paper than any screen colour. Matching is done in Lab, not by comparing hex codes.</p>
+    <p class="hint">Colour data: Lab values from Adobe colour books (npm package <code>color-books</code>, unofficial, 14,378 colours). Confirm final choices with a physical Pantone guide or Pantone Connect. PANTONE® is a trademark of Pantone LLC.</p>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/color.js"></script>
+<script src="/static/colorinput.js"></script>
+<script src="/static/pantone.js"></script>
+</body>
+</html>

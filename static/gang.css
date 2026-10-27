@@ -1,0 +1,26 @@
+/* Gang sheet page (uses the Patch mockup layout) */
+.gs-logo { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: center; margin: 4px 0 6px; }
+.gs-logo img { width: 64px; height: 64px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.gs-logo b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-logo small { color: var(--muted); font-size: 12px; }
+.gs-dims { gap: 8px; }
+.gs-dims label { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
+.gs-dims input { width: 72px; }
+.unit-label { color: var(--muted); font-size: 13px; }
+.gs-count { margin: 8px 0 2px; font-weight: 600; }
+#preview { box-shadow: 0 2px 12px rgb(0 0 0 / .18); background: #fff; }
+
+/* clickable places over the preview */
+.gs-overlay { position: absolute; pointer-events: none; }
+.gs-cell { position: absolute; pointer-events: auto; padding: 0; border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.gs-cell:hover { background: rgb(217 45 32 / .14); outline: 1.5px solid var(--danger); }
+.gs-cell:hover::after, .gs-cell.off::after { position: absolute; inset: 0; display: grid; place-items: center; font: 600 16px/1 -apple-system, sans-serif; }
+.gs-cell:hover::after { content: "×"; color: var(--danger); }
+.gs-cell.off { outline: 1.5px dashed #a3a8b0; background: rgb(0 0 0 / .03); }
+.gs-cell.off::after { content: "+"; color: #8a9099; }
+.gs-cell.off:hover { background: rgb(47 107 255 / .1); outline-color: var(--sel); }
+.gs-cell.off:hover::after { content: "+"; color: var(--sel); }
+.gs-row { position: absolute; pointer-events: auto; width: 20px; height: 20px; padding: 0; border-radius: 50%; transform: translate(-130%, -50%);
+  font: 600 13px/18px -apple-system, sans-serif; color: var(--muted); background: var(--panel); border: 1px solid var(--line); opacity: .7; }
+.gs-row:hover { opacity: 1; color: var(--danger); border-color: var(--danger); }
+.gs-row.restore:hover { color: var(--sel); border-color: var(--sel); }

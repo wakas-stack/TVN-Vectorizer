@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vectorizer Local</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
+  <nav class="nav">
+    <a href="/" aria-current="page">Vectorizer</a>
+    <a href="/pantone">Pantone match</a>
+    <a href="/thread">Thread match</a>
+    <a href="/patch">Patch mockup</a>
+  <a href="/gang">Gang sheet</a>
+  </nav>
+  <div class="file-info" id="fileInfo"></div>
+  <div class="top-actions" id="topActions" hidden>
+    <button class="ghost" id="newBtn" title="Open another image">New image</button>
+    <button class="ghost" id="patchBtn" title="Show this logo as an embroidered, woven, printed or leather patch">Patch mockup ↗</button>
+    <button class="primary" id="downloadBtn">Download</button>
+  </div>
+</header>
+
+<!-- landing -->
+<main id="landing" class="landing">
+  <h1>Convert images to vectors</h1>
+  <p class="sub">PNG · JPG · GIF · BMP · WebP → SVG · PDF · EPS · DXF · PNG. Runs on this computer; nothing is uploaded anywhere.</p>
+  <label class="drop" id="drop">
+    <input type="file" id="fileInput" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp" hidden>
+    <div class="drop-icon">⬆</div>
+    <div class="drop-title">Drop an image to vectorize</div>
+    <div class="drop-sub">or paste with ⌘V</div>
+    <span class="primary as-button">Choose image file</span>
+  </label>
+</main>
+
+<!-- workspace -->
+<main id="workspace" class="workspace" hidden>
+  <section class="canvas-col">
+    <div class="toolbar">
+      <div class="seg" id="viewSeg" role="group" aria-label="View">
+        <button data-view="vectors" class="on">Vectors</button>
+        <button data-view="compare">Compare</button>
+        <button data-view="pixels">Pixels</button>
+      </div>
+      <div class="seg" id="toolSeg" role="group" aria-label="Tool">
+        <button data-tool="pan" class="on" title="Drag to pan, scroll to zoom">Pan</button>
+        <button data-tool="select" title="Click a shape to recolor or delete it">Edit shapes</button>
+        <button data-tool="background" title="Click shapes to take them out or put them back">Background</button>
+        <button data-tool="crop" title="Drag a box to vectorize only that part">Crop</button>
+      </div>
+      <div class="zoom">
+        <button id="zoomOut" aria-label="Zoom out">−</button>
+        <span id="zoomLabel">100%</span>
+        <button id="zoomIn" aria-label="Zoom in">+</button>
+        <button id="zoomFit">Fit</button>
+      </div>
+    </div>
+    <div class="viewport" id="viewport">
+      <div class="stage" id="stage">
+        <img id="raster" alt="Original image" draggable="false">
+        <div id="vector" class="vector"></div>
+        <div id="cropBox" class="crop-box" hidden></div>
+      </div>
+      <div class="split" id="split" hidden><div class="split-handle">⇆</div></div>
+      <div class="busy" id="busy" hidden><div class="spinner"></div><span>Vectorizing…</span></div>
+    </div>
+    <div class="statusbar" id="status"></div>
+  </section>
+
+  <aside class="panel">
+    <details open>
+      <summary>Palette</summary>
+      <div class="row">
+        <label class="radio"><input type="radio" name="palMode" value="auto" checked> Detect colours</label>
+        <label class="radio"><input type="radio" name="palMode" value="max"> Max colours</label>
+      </div>
+      <div class="row" id="maxColorsRow" hidden>
+        <input type="range" id="maxColors" min="2" max="64" value="8"><output id="maxColorsOut">8</output>
+      </div>
+      <div class="swatches" id="swatches"></div>
+      <div class="row small">
+        <button id="mergeBtn" disabled title="Merge the selected colours into the first one">Merge selected</button>
+        <button id="removeColorBtn" disabled title="Pixels of this colour go to the nearest remaining colour">Remove colour</button>
+        <label class="add-color" title="Add a colour to the palette">+ Add <input type="color" id="addColor" value="#888888"></label>
+      </div>
+      <div class="row small"><button id="pantoneBtn" title="Open the Pantone match page with these colours">Match palette to Pantone ↗</button><button id="threadBtn" title="Open the Thread match page with these colours">Match to thread ↗</button></div>
+      <p class="hint">Click a swatch to select it (⇧-click for several). Change a colour with its picker.</p>
+    </details>
+
+    <details open>
+      <summary>Tracing</summary>
+      <div class="row"><span class="lbl">Method</span>
+        <select id="tracer" title="Precise follows anti-aliased edges to a fraction of a pixel; Classic is quicker on photos">
+          <option value="precise">Precise (smooth, exact edges)</option><option value="classic">Classic (quicker for photos)</option>
+        </select>
+      </div>
+      <label class="slider">Detail <input type="range" id="detail" min="0" max="100" value="50"><output>50</output></label>
+      <label class="slider">Smoothing <input type="range" id="smoothing" min="0" max="100" value="50"><output>50</output></label>
+      <label class="slider">Corners <input type="range" id="corner" min="10" max="150" value="60"><output>60°</output></label>
+      <label class="check"><input type="checkbox" id="fitShapes" checked> Fit whole shapes (circles, ellipses, rectangles)</label>
+    </details>
+
+    <details open>
+      <summary>Layers</summary>
+      <div class="row">
+        <span class="lbl">Stacking</span>
+        <div class="seg small" id="stackSeg">
+          <button data-v="cutouts" class="on">Cut-outs</button><button data-v="stacked">Stacked</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">Group by</span>
+        <select id="groupBy">
+          <option value="color" selected>Colour</option>
+          <option value="layer">Draw-order layer</option>
+          <option value="parent">Parent shape</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <ul class="layers" id="layers"></ul>
+    </details>
+
+    <details open id="editPanel">
+      <summary>Edit</summary>
+      <div class="row">
+        <button id="bgAuto">Remove background</button>
+        <button id="undoBtn" disabled>Undo</button>
+        <button id="resetEdits" disabled>Reset edits</button>
+      </div>
+      <div id="selection" class="selection" hidden>
+        <div class="row"><span class="lbl" id="selLabel">Shape</span></div>
+        <div class="row">
+          <input type="color" id="selColor">
+          <label class="check"><input type="checkbox" id="selAll"> every shape of this colour</label>
+        </div>
+        <div class="row"><button id="selDelete">Delete shape</button></div>
+      </div>
+      <p class="hint" id="editHint">Pick <b>Edit shapes</b> or <b>Background</b> above the image, then click shapes.</p>
+    </details>
+
+    <details>
+      <summary>Gaps &amp; strokes</summary>
+      <label class="check"><input type="checkbox" id="gapFiller" checked> Gap filler</label>
+      <label class="check"><input type="checkbox" id="gapClip"> Clip overflow (stacked)</label>
+      <label class="check"><input type="checkbox" id="gapNSS" checked> Non-scaling gap strokes</label>
+      <label class="slider">Gap width <input type="range" id="gapWidth" min="0.5" max="3" step="0.1" value="1.5"><output>1.5</output></label>
+    </details>
+  </aside>
+</main>
+
+<!-- download dialog -->
+<dialog id="dl">
+  <form method="dialog" class="dl">
+    <h2>Download</h2>
+    <div class="presets">
+      <span class="lbl">Preset</span>
+      <button type="button" data-preset="edit" class="on">Editing</button>
+      <button type="button" data-preset="cut">Cutting &amp; engraving</button>
+      <button type="button" data-preset="print">Print</button>
+    </div>
+    <div class="formats" id="formats">
+      <label><input type="radio" name="fmt" value="svg" checked> SVG</label>
+      <label><input type="radio" name="fmt" value="pdf"> PDF</label>
+      <label><input type="radio" name="fmt" value="eps"> EPS</label>
+      <label><input type="radio" name="fmt" value="dxf"> DXF</label>
+      <label><input type="radio" name="fmt" value="png"> PNG</label>
+    </div>
+    <div class="grid">
+      <label>Draw style
+        <select id="drawStyle">
+          <option value="fill_shapes">Fill shapes</option>
+          <option value="stroke_shapes">Stroke shapes</option>
+          <option value="stroke_edges">Stroke edges</option>
+        </select>
+      </label>
+      <label>Stroke width <input type="number" id="strokeWidth" value="1" min="0.1" step="0.1"></label>
+      <label class="check"><input type="checkbox" id="strokeNSS" checked> Non-scaling strokes</label>
+      <label class="check"><input type="checkbox" id="strokeOverride"> Override colour <input type="color" id="strokeColor" value="#000000"></label>
+      <label>SVG version
+        <select id="svgVersion"><option value="1.1">SVG 1.1</option><option value="1.0">SVG 1.0</option><option value="tiny1.2">SVG Tiny 1.2</option></select>
+      </label>
+      <label class="check"><input type="checkbox" id="fixedSize" checked> Fixed size (width/height in file)</label>
+      <label>DXF compatibility
+        <select id="dxfLevel"><option value="lines">Lines only</option><option value="lines_arcs">Lines &amp; arcs</option><option value="splines">Lines, arcs &amp; splines</option></select>
+      </label>
+      <label>PNG scale <input type="number" id="pngScale" value="4" min="0.25" max="16" step="0.25"></label>
+      <label>Output size
+        <select id="sizeMode">
+          <option value="unchanged">Unchanged</option><option value="scale">Scaled</option>
+          <option value="width">Set width</option><option value="height">Set height</option>
+          <option value="fit">Fit inside box</option><option value="fill">Fill box</option><option value="stretch">Stretch to box</option>
+        </select>
+      </label>
+      <label>Scale <input type="number" id="sizeScale" value="1" min="0.01" step="0.1"></label>
+      <label>Width <input type="number" id="sizeW" min="0" step="any"></label>
+      <label>Height <input type="number" id="sizeH" min="0" step="any"></label>
+      <label>Unit <select id="sizeUnit"><option>px</option><option>in</option><option>cm</option><option>mm</option></select></label>
+      <label>DPI <input type="number" id="sizeDpi" value="72" min="1"></label>
+    </div>
+    <p class="hint" id="dlNote"></p>
+    <div class="dl-actions">
+      <button value="cancel" class="ghost">Cancel</button>
+      <button type="button" class="primary" id="dlGo">Download</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

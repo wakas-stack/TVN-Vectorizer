@@ -1,0 +1,11 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# build output (made by build_app.sh)
+build/
+dist/
+
+# macOS
+.DS_Store

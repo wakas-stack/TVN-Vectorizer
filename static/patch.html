@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patch Mockup</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/patch.css">
+</head>
+<body class="patch-page">
+<header class="top">
+  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
+  <nav class="nav">
+    <a href="/">Vectorizer</a>
+    <a href="/pantone">Pantone match</a>
+    <a href="/thread">Thread match</a>
+    <a href="/patch" aria-current="page">Patch mockup</a>
+  <a href="/gang">Gang sheet</a>
+  </nav>
+  <div class="file-info" id="fileInfo"></div>
+  <div class="top-actions">
+    <button class="ghost" id="newLogo">Choose logo</button>
+    <button class="ghost" id="savePdf" hidden disabled title="Layered vector PDF: shape, black logo, stitch lines">Download PDF</button>
+    <button class="primary" id="savePng" disabled>Download PNG</button>
+  </div>
+</header>
+
+<main class="pt">
+  <section class="pt-stage" id="stage">
+    <label class="drop pt-drop" id="drop">
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp,image/svg+xml,.svg" hidden>
+      <div class="drop-icon">⬆</div>
+      <div class="drop-title">Drop a logo to make a patch</div>
+      <div class="drop-sub">PNG, JPG, WebP, GIF, BMP or SVG · or paste with ⌘V</div>
+      <span class="primary as-button">Choose logo</span>
+    </label>
+    <img id="preview" alt="Patch preview" hidden>
+    <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">Making the patch…</span></div>
+    <div class="pt-status" id="status"></div>
+  </section>
+
+  <aside class="panel pt-panel" id="panel">
+    <details open>
+      <summary>Patch type</summary>
+      <div class="pt-styles" id="styles">
+        <button data-style="embroidery" class="on"><b>Embroidered</b><span>Raised thread on twill</span></button>
+        <button data-style="woven"><b>Woven</b><span>Fine flat thread, small detail</span></button>
+        <button data-style="sublimated"><b>Dye-sublimated</b><span>Printed, full colour</span></button>
+        <button data-style="leather"><b>Faux/Leather</b><span>Leatherette, pressed or engraved</span></button>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Colours</summary>
+      <div class="row" id="threadChartRow"><span class="lbl">Thread</span>
+        <select id="threadChart"><option value="isacord-40">Isacord 40</option><option value="madeira-polyneon-40">Madeira Polyneon 40</option><option value="robison-anton-polyester">Robison-Anton Polyester 40</option></select>
+      </div>
+      <ul class="pt-colors" id="colors"></ul>
+      <datalist id="threadList"></datalist>
+      <p class="hint" id="rolesHint"></p>
+    </details>
+
+    <details open>
+      <summary>Shape &amp; border</summary>
+      <div class="row"><span class="lbl">Shape</span>
+        <select id="shape">
+          <option value="logo">Logo only (no backing)</option>
+          <option value="outline">Follow the logo</option>
+          <option value="circle">Circle</option>
+          <option value="rounded">Rounded rectangle</option>
+          <option value="rectangle">Rectangle</option>
+        </select>
+      </div>
+      <div class="row" id="outlineRow" hidden><span class="lbl">Outline</span>
+        <select id="outline"><option value="none">None</option><option value="filled">Filled outline</option></select>
+      </div>
+      <label class="slider" id="outlineWidthRow" hidden>Outline width <input type="range" id="outlineWidth" min="1" max="8" step="0.5" value="3"><output>3%</output></label>
+      <div class="row" id="outlineColorRow" hidden><span class="lbl">Colour</span>
+        <label class="check"><input type="checkbox" id="outlineAuto" checked> Automatic</label>
+        <input type="color" id="outlineColor" value="#c8956a" title="Pick a colour">
+      </div>
+      <label class="slider" id="logoScaleRow">Logo size <input type="range" id="logoScale" min="50" max="150" step="5" value="100"><output>100%</output></label>
+      <div class="row" id="fabricRow" hidden><span class="lbl">Fabric</span>
+        <label class="check"><input type="checkbox" id="fabricAuto" checked> Automatic</label>
+        <input type="color" id="fabricColor" value="#efece4" disabled>
+      </div>
+      <div class="row" id="borderRow"><span class="lbl">Border</span><select id="border"></select></div>
+      <div class="row" id="seamRow" hidden><span class="lbl">Stitch</span>
+        <select id="seamStyle"><option value="stitch">Stitched (dashes)</option><option value="dotted">Dotted</option><option value="solid">Plain line</option></select>
+      </div>
+      <label class="slider" id="seamWidthRow" hidden>Thickness <input type="range" id="seamWidth" min="0.4" max="2.4" step="0.1" value="1"><output>1.0×</output></label>
+      <div class="row" id="borderColorRow"><span class="lbl">Colour</span>
+        <label class="check"><input type="checkbox" id="borderAuto" checked> <span id="borderAutoText">Same as fabric</span></label>
+        <input type="color" id="borderColor" value="#efe3c8" title="Pick a colour">
+      </div>
+      <label class="slider">Width <input type="range" id="borderWidth" min="1.5" max="7" step="0.5" value="3.5"><output>3.5%</output></label>
+    </details>
+
+    <details open>
+      <summary>Look</summary>
+      <div id="leatherBox" hidden>
+        <div class="row"><span class="lbl">Leatherette</span>
+          <span class="pt-sheet-chip" id="sheetChip"></span>
+          <select id="leatherette"><option value="">Drawn leather (colour below)</option></select>
+        </div>
+        <p class="hint" id="sheetHint" hidden></p>
+        <div class="row" id="leatherColorRow"><span class="lbl">Leather</span>
+          <div class="pt-leathers" id="leathers"></div>
+          <input type="color" id="leatherColor" value="#a8693a" title="Custom leather colour">
+        </div>
+        <div class="row"><span class="lbl">Logo</span>
+          <select id="finish"><option value="deboss">Debossed (pressed in)</option><option value="emboss">Embossed (raised)</option><option value="engrave">Laser engraved</option></select>
+        </div>
+      </div>
+      <label class="slider" id="reliefRow">Relief <input type="range" id="relief" min="0" max="1" step="0.05" value="0.7"><output>70%</output></label>
+      <label class="slider" id="densityRow">Thread <input type="range" id="density" min="0.5" max="2" step="0.1" value="1"><output>1.0×</output></label>
+      <label class="slider" id="angleRow">Stitch angle <input type="range" id="angle" min="0" max="180" step="5" value="45"><output>45°</output></label>
+      <label class="slider">Light <input type="range" id="light" min="0" max="355" step="5" value="135"><output>135°</output></label>
+      <label class="slider">Gloss <input type="range" id="gloss" min="0" max="1" step="0.05" value="0.5"><output>50%</output></label>
+      <label class="check" id="fullRow"><input type="checkbox" id="fullEmb"> 100% embroidered (stitch the fabric too)</label>
+    </details>
+
+    <details open>
+      <summary>Background &amp; export</summary>
+      <div class="row"><span class="lbl">Background</span>
+        <select id="bgMode"><option value="transparent">Transparent</option><option value="#ffffff">White</option><option value="custom">Colour…</option></select>
+        <input type="color" id="bgColor" value="#e9e5df" hidden>
+      </div>
+      <label class="check"><input type="checkbox" id="shadow" checked> Drop shadow</label>
+      <div class="row"><span class="lbl">PNG size</span>
+        <select id="exportSize"><option value="1000">1000 px</option><option value="2000" selected>2000 px</option><option value="3000">3000 px</option></select>
+      </div>
+      <p class="hint">A mockup for showing or ordering. Embroidery machines need a separate stitch file (DST/PES).</p>
+    </details>
+  </aside>
+</main>
+<!-- asked before another logo replaces the one being worked on (a div, not <dialog>: macOS 11's WebKit lacks it) -->
+<div class="pt-modal" id="confirmNew" hidden>
+  <div class="pt-modal-box" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText">
+    <h2 id="confirmTitle">Choose another logo?</h2>
+    <p id="confirmText">The patch you are working on will be discarded: its logo and colour settings. Click "Download PNG" first if you want to keep it.</p>
+    <div class="pt-modal-actions">
+      <button type="button" id="confirmKeep">Keep working</button>
+      <button type="button" class="danger" id="confirmDiscard">Discard and choose logo</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/color.js"></script>
+<script src="/static/patch.js"></script>
+</body>
+</html>

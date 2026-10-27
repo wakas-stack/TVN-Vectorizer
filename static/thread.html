@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thread Match</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/pantone.css">
+<link rel="stylesheet" href="/static/thread.css">
+</head>
+<body class="pantone-page">
+<header class="top">
+  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
+  <nav class="nav">
+    <a href="/">Vectorizer</a>
+    <a href="/pantone">Pantone match</a>
+    <a href="/thread" aria-current="page">Thread match</a>
+    <a href="/patch">Patch mockup</a>
+  <a href="/gang">Gang sheet</a>
+  </nav>
+</header>
+
+<main class="pm">
+  <section class="pm-input th-pms">
+    <h2>Pantone (PMS) to Robison-Anton</h2>
+    <p class="sub">Type a PMS number, like 101 C, 286 or Cool Gray 5, to see its Robison-Anton Polyester 40 thread.</p>
+    <div class="pm-row">
+      <div class="th-pms-box">
+        <input id="pmsInput" class="pm-hex" type="text" placeholder="101 C" autocomplete="off" spellcheck="false" aria-label="Pantone (PMS) number"
+          role="combobox" aria-expanded="false" aria-controls="pmsList" aria-autocomplete="list">
+        <div id="pmsList" class="th-pms-list" role="listbox" aria-label="PMS numbers on the Robison-Anton chart" hidden></div>
+      </div>
+    </div>
+    <div id="pmsResults" class="th-pms-results"></div>
+  </section>
+
+  <section class="pm-input">
+    <h1>Find the matching embroidery thread</h1>
+    <p class="sub">Enter a hex code (or several, separated by commas, spaces or new lines), or an RGB or CMYK colour.</p>
+    <div class="ci-modes" role="group" aria-label="Colour format"><button type="button" data-mode="hex" aria-pressed="true">Hex</button><button type="button" data-mode="rgb" aria-pressed="false">RGB</button><button type="button" data-mode="cmyk" aria-pressed="false">CMYK</button></div>
+    <div class="pm-row" id="hexRow">
+      <input id="hexInput" class="pm-hex" type="text" placeholder="#0E6ACE" autocomplete="off" spellcheck="false" aria-label="Hex colour codes">
+      <input id="picker" type="color" value="#0e6ace" aria-label="Pick a colour">
+      <button id="eyedrop" type="button" title="Pick a colour from anywhere on screen" hidden>Eyedropper</button>
+    </div>
+    <div class="pm-row ci-fields" id="rgbRow" hidden><span class="ci-out"></span></div>
+    <div class="pm-row ci-fields" id="cmykRow" hidden><span class="ci-out"></span></div>
+    <p class="pm-error" id="err" hidden></p>
+    <div class="pm-row pm-options">
+      <div class="th-books" id="books" role="group" aria-label="Thread charts"></div>
+      <label class="pm-count">Show <select id="count"><option>3</option><option>5</option><option selected>8</option><option>12</option><option>20</option></select> matches</label>
+    </div>
+  </section>
+
+  <section id="results" class="pm-results"></section>
+
+  <section class="pm-help">
+    <h2>Reading the results</h2>
+    <p><b>RGB and CMYK</b> are turned into a screen colour before matching. CMYK is read as printed on coated paper with the <i>Coated FOGRA39</i> profile (ISO 12647-2, the usual standard for offset printing, and Adobe's default in Europe), shown and matched as its screen colour. CMYK made for another press or paper (for example GRACoL or uncoated) can differ.</p>
+    <p><b>ΔE</b> is the CIEDE2000 colour difference between your colour and the thread's screen colour.
+      Under 1 the eye sees no difference; under 2 only a trained eye sees one side by side; under 3.5 the difference is slight; above 5 it is a different colour.</p>
+    <p>A thread's colour on screen is an approximation: dye lots, sheen and the fabric all change how it looks once stitched. Use these matches as a starting point and check them against a physical thread card before production.</p>
+    <p class="hint">Colour data: thread numbers, names and screen colours for Isacord 40 (390 colours) and Madeira Polyneon 40 (412 colours), as compiled by the DigitEMB Thread Color Matcher (digitemb.com, October 2026) from the makers' reference charts. Unofficial; keep to personal or internal use. Thread brand names belong to their owners.</p>
+    <p class="hint">Robison-Anton Polyester 40: the PMS to thread chart (267 matches) and the thread swatch colours are from The Thread Exchange (thethreadexchange.com, "Pantone To R/A Polyester Conversion" and the R/A Polyester catalogue, October 2026). Threads on the chart that have no swatch there are shown in the colour of their Pantone. A PMS that is not on the chart gets the nearest threads by colour instead. Unofficial; keep to personal or internal use.</p>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/color.js"></script>
+<script src="/static/colorinput.js"></script>
+<script src="/static/thread.js"></script>
+</body>
+</html>

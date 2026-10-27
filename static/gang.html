@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gang Sheet</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/patch.css">
+<link rel="stylesheet" href="/static/gang.css">
+</head>
+<body class="patch-page">
+<header class="top">
+  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
+  <nav class="nav">
+    <a href="/">Vectorizer</a>
+    <a href="/pantone">Pantone match</a>
+    <a href="/thread">Thread match</a>
+    <a href="/patch">Patch mockup</a>
+    <a href="/gang" aria-current="page">Gang sheet</a>
+  </nav>
+  <div class="file-info" id="fileInfo"></div>
+  <div class="top-actions">
+    <button class="ghost" id="newLogo">Choose logo</button>
+    <button class="primary" id="download" disabled>Download</button>
+  </div>
+</header>
+
+<main class="pt">
+  <section class="pt-stage" id="stage">
+    <label class="drop pt-drop" id="drop">
+      <input type="file" id="fileInput" accept=".pdf,.ai,.svg,.eps,image/png,image/jpeg,image/webp,image/tiff,image/gif,image/bmp" hidden>
+      <div class="drop-icon">⬆</div>
+      <div class="drop-title">Drop a logo to fill a sheet</div>
+      <div class="drop-sub">PDF, AI or SVG (kept as vectors) · PNG, JPG, WebP or TIFF</div>
+      <span class="primary as-button">Choose logo</span>
+    </label>
+    <img id="preview" alt="Gang sheet preview" hidden>
+    <div class="gs-overlay" id="overlay" hidden></div>
+    <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">Filling the sheet…</span></div>
+    <div class="pt-status" id="status"></div>
+  </section>
+
+  <aside class="panel pt-panel" id="panel">
+    <details open>
+      <summary>Logo</summary>
+      <div class="gs-logo" id="logoCard" hidden>
+        <img id="logoThumb" alt="">
+        <div><b id="logoName"></b><small id="logoKind"></small></div>
+      </div>
+      <p class="hint" id="logoHint">PDF, AI (saved PDF compatible) and SVG logos stay vector in PDF and AI sheets. EPS logos cannot be read on a Mac: save them as PDF first.</p>
+    </details>
+
+    <details open>
+      <summary>Sheet</summary>
+      <div class="row"><span class="lbl">Size</span>
+        <select id="preset">
+          <option value="8.5x11in">Letter 8.5 × 11 in</option>
+          <option value="8.5x14in">Legal 8.5 × 14 in</option>
+          <option value="11x17in">Tabloid 11 × 17 in</option>
+          <option value="12x18in">12 × 18 in</option>
+          <option value="13x19in">13 × 19 in</option>
+          <option value="210x297mm">A4 210 × 297 mm</option>
+          <option value="297x420mm">A3 297 × 420 mm</option>
+          <option value="22x24in">DTF 22 × 24 in</option>
+          <option value="22x36in">DTF 22 × 36 in</option>
+          <option value="22x48in">DTF 22 × 48 in</option>
+          <option value="22x60in">DTF 22 × 60 in</option>
+          <option value="22x120in">DTF 22 × 120 in</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="row gs-dims">
+        <label>Width <input type="number" id="sheetW" min="0.1" step="0.01" value="8.5"></label>
+        <label>Height <input type="number" id="sheetH" min="0.1" step="0.01" value="11"></label>
+        <select id="unit" aria-label="Units"><option value="in">in</option><option value="cm">cm</option><option value="mm">mm</option></select>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Logo size &amp; spacing</summary>
+      <div class="row gs-dims">
+        <label>Width <input type="number" id="logoW" min="0.01" step="0.01" value="1.5"></label>
+        <label>Height <input type="number" id="logoH" min="0.01" step="0.01" value="1.5"></label>
+        <span class="unit-label"></span>
+      </div>
+      <label class="check"><input type="checkbox" id="keep" checked> Keep the logo's proportions</label>
+      <div class="row gs-dims">
+        <label>Gap <input type="number" id="gap" min="0" step="0.01" value="0.125"></label>
+        <label>Margin <input type="number" id="margin" min="0" step="0.01" value="0.25"></label>
+        <span class="unit-label"></span>
+      </div>
+      <label class="check"><input type="checkbox" id="rotate" checked> Turn logos 90° when more fit</label>
+      <label class="check"><input type="checkbox" id="boxes"> Box around each logo</label>
+      <label class="check"><input type="checkbox" id="border" checked> Sheet border</label>
+      <p class="gs-count" id="count"></p>
+      <p class="hint" id="removeHint" hidden>Click a logo to take it off the sheet (click again to put it back); the round buttons beside the rows do a whole row. The sheet keeps its size and every other logo its place.</p>
+      <div class="row small"><button type="button" id="undo" disabled title="Undo (⌘Z / Ctrl+Z)">↶ Undo</button>
+        <button type="button" id="restoreAll" hidden>Put all logos back</button></div>
+    </details>
+
+    <details open>
+      <summary>Download</summary>
+      <div class="row"><span class="lbl">Format</span>
+        <select id="format">
+          <option value="pdf">PDF (vector)</option>
+          <option value="ai">AI (Illustrator, PDF based)</option>
+          <option value="eps">EPS</option>
+          <option value="png">PNG (transparent)</option>
+          <option value="jpg">JPG</option>
+          <option value="tiff">TIFF (transparent)</option>
+        </select>
+      </div>
+      <div class="row" id="dpiRow" hidden><span class="lbl">Resolution</span>
+        <select id="dpi"><option value="150">150 dpi</option><option value="300" selected>300 dpi</option><option value="600">600 dpi</option></select>
+      </div>
+      <p class="hint" id="formatHint"></p>
+    </details>
+  </aside>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/gang.js"></script>
+</body>
+</html>

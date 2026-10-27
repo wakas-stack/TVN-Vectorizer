@@ -1,0 +1,5 @@
+#!/bin/zsh
+# Command-line vectorizer: ./vectorize image.png [options]   (./vectorize -h for help)
+DIR="$(cd "$(dirname "$0")" && pwd)"
+export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib
+exec "$DIR/.venv/bin/python" "$DIR/vectorize.py" "$@"

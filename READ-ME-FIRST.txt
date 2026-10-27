@@ -1,0 +1,100 @@
+VECTORIZER LOCAL - for Mac
+==========================
+
+Turns images (PNG, JPG, GIF, BMP, WebP) into editable, layered vector files
+(SVG, PDF, EPS, DXF, PNG), matches hex colours to Pantone colours, and shows
+logos as embroidered, woven, dye-sublimated or leather patch mockups.
+Everything runs on your Mac. No internet and nothing to install.
+
+Works on Apple Silicon (M1-M4) and Intel Macs, macOS 11 Big Sur or newer
+(macOS 12 Monterey or newer recommended).
+
+
+1. INSTALL
+----------
+Drag "Vectorizer Local.app" into your Applications folder
+(or keep it anywhere you like).
+
+
+2. OPEN
+-------
+Double-click "Vectorizer Local.app".
+
+The first time on a new Mac, macOS may say it "could not verify" the app,
+because it is not registered with Apple. That happens when the app arrives
+by AirDrop, download, email or a chat app. To allow it, once:
+
+  macOS 15 Sequoia or newer:
+    1. Click "Done" in the warning.
+    2. Open System Settings > Privacy & Security.
+    3. Scroll down to "Vectorizer Local was blocked..." and click "Open Anyway".
+    4. Enter your Mac password, then click "Open".
+
+  macOS 14 Sonoma or older:
+    Right-click (or Control-click) the app, choose "Open", then click "Open".
+
+  Or, in Terminal (any macOS version):
+    xattr -dr com.apple.quarantine "/Applications/Vectorizer Local.app"
+
+After that it opens with a normal double-click.
+Copying it with a USB stick or external drive usually avoids the warning.
+
+
+3. USE
+------
+- "Vectorizer" (top left): drop, paste (Cmd+V) or choose an image. Adjust the
+  palette, layers and editing tools on the right, then click "Download" and
+  choose where to save.
+- "Pantone match": type or paste hex codes (e.g. #E4002B) to see the closest
+  Pantone colours. "Match palette to Pantone" in the Vectorizer opens it with
+  the image's colours.
+- "Thread match": type or paste hex codes to see the closest Isacord 40 and
+  Madeira Polyneon 40 embroidery threads (number and name). "Match to thread"
+  in the Vectorizer opens it with the image's colours.
+- On both match pages, the Hex / RGB / CMYK buttons let you enter an RGB
+  (0-255) or CMYK (0-100%) colour instead of a hex code. CMYK is read as
+  printed with the Coated FOGRA39 press profile (ISO 12647-2, coated paper);
+  CMYK made for another press or paper can differ.
+- "Patch mockup": drop a logo (PNG, JPG, WebP, GIF, BMP or SVG) to see it as an
+  embroidered, woven, dye-sublimated or leather patch. Pick which colours are
+  fabric or thread, the shape, border and look, then "Download PNG".
+  For Faux/Leather, pick a Heritage Leatherette sheet (Lone Star Adhesive)
+  under Look; an engraved logo shows the sheet's core colour. "Logo size"
+  under Shape & border makes the logo smaller or larger inside the patch.
+  The stitched seam can be dashed, dotted or a plain line, with its own
+  thickness and colour (Stitch, Thickness and Colour under Shape & border).
+  For an embroidered patch, choose Isacord 40 or Madeira Polyneon 40 under
+  Colours and type a thread number under each thread colour (or click "Use"
+  for the nearest thread).
+  ("Patch mockup" in the Vectorizer sends the open image there.)
+  "Choose logo" asks before replacing a patch you are working on.
+  With Shape "Logo only", Outline can be None or a Filled outline (width and
+  colour) around the logo. Faux/Leather engraves or presses a colour logo as
+  one solid logo. "Download PDF" (Faux/Leather) saves a layered vector PDF:
+  the shape in white with a thin outline, the logo in black and the stitch
+  lines, each on its own layer.
+- "Gang sheet": add one logo (PDF, AI saved PDF compatible, SVG, PNG, JPG,
+  WebP or TIFF), choose the sheet size and the logo size, and the sheet is
+  filled with as many logos as fit (turned 90 degrees when more fit). Gap,
+  margin, a box round each logo and the sheet border can be changed.
+  Download as PDF or AI (vector for PDF/AI/SVG logos), EPS, PNG, JPG or TIFF
+  at 150-600 dpi. Click a logo on the sheet to take it off (click again to
+  put it back); the round buttons beside the rows take off a whole row. The
+  sheet keeps its size and the other logos stay where they are.
+  Cmd+Z (Ctrl+Z) or the Undo button undoes the last change, up to 50 times.
+  EPS logos cannot be read on a Mac (macOS has no PostScript
+  reader any more): save them as PDF first.
+- Close the window to quit.
+
+
+Notes
+-----
+- Pantone matches use unofficial Pantone colour data (from Adobe colour
+  books). Confirm final colours with a physical Pantone guide. Pantone's data
+  is proprietary: keep this to personal or internal use. PANTONE is a
+  trademark of Pantone LLC.
+- Thread colours come from the DigitEMB Thread Color Matcher (digitemb.com,
+  October 2026). A thread's screen colour is an approximation: check against
+  a physical thread card before production. Personal or internal use.
+- If something goes wrong, the log is in
+  ~/Library/Logs/Vectorizer Local.log
