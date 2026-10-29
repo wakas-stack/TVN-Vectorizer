@@ -105,6 +105,25 @@ def _width(p: Polygon) -> float:
     return 2 * p.area / max(p.length, 1e-9)
 
 
+HOLE_MIN = 1.0       # mm2: a smaller hole (a tiny e's eye) cannot be sewn open: it is filled
+
+
+def _widened(p: Polygon, pull):
+    """The part as its top stitches cover it: widened by the pull compensation (half of it on small
+    lettering: strokes under 2 mm in a part under 16 mm, so it stays slim and its letters apart;
+    long fine outlines keep it all), into its holes too; a hole under HOLE_MIN (a tiny e's eye), too
+    small to sew open, is filled, so the letter is cut into clean strokes round it."""
+    x0, y0, x1, y1 = p.bounds
+    small = _width(p) < 2.0 and max(x1 - x0, y1 - y0) < 16.0
+    pc = (pull * 0.5 if small else pull) if pull else 0
+    top = p.buffer(pc, join_style=1) if pc else p
+    out = []
+    for q in _parts(top):
+        keep = [h for h in q.interiors if Polygon(h).area >= HOLE_MIN]
+        out.append(Polygon(q.exterior, keep) if len(keep) != len(q.interiors) else q)
+    return out[0] if len(out) == 1 else shapely.make_valid(unary_union(out))
+
+
 def _scan(poly, angle, spacing):
     """Rows of segments across `poly`: stitches run at `angle` (degrees, 0 = along x), rows
     `spacing` apart. In the turned frame (u along the stitches, v across): [(v, [(u0, u1)])]."""
@@ -1071,6 +1090,27 @@ class Sewing:
         self.tied = False          # the thread is locked at the needle
         self.trims = 0
         self.objects = 0           # top-stitch objects sewn (a satin, a fill, a column): Wilcom's "Objects"
+        self.edge = None           # while a fill is sewn: its outline, to travel along (Wilcom's "travel on edge")
+
+    def _edge_way(self, a, b):
+        """From a to b along the fill's outline (both on it), the shorter way round, or None: the
+        travel between its sections hides in the edge, where Wilcom's fills travel too."""
+        for ring in getattr(self.edge, "rings", []):
+            pa, pb = Point(a), Point(b)
+            if ring.distance(pa) > 0.8 or ring.distance(pb) > 0.8:
+                continue
+            L, da, db = ring.length, ring.project(pa), ring.project(pb)
+            f = (db - da) % L
+
+            def walk(s, n):         # n mm along the ring from s, wrapping round its start
+                if s + n <= L:
+                    return list(substring(ring, s, s + n).coords)
+                return list(substring(ring, s, L).coords) + list(substring(ring, 0, s + n - L).coords)[1:]
+            pts = walk(da, f) if f <= L - f else walk(db, L - f)[::-1]
+            if min(f, L - f) > 60:
+                return None
+            return [a, *pts, b]
+        return None
 
     def stitch(self, p):
         if math.dist(p, self.at) < MIN_STITCH and self.out:
@@ -1117,6 +1157,8 @@ class Sewing:
             way = self.router.path(self.at, p, 2.5 * d + 8)
             if not way and d <= HOP:      # a short hop over finished stitches of this colour sinks into them
                 way = self.router.path(self.at, p, 1.5 * d + 1, over=True)
+            if not way and self.edge is not None:     # a fill: from one section to the next along its edge
+                way = self._edge_way(self.at, p)
         if way:
             for q in _run_along(LineString(way))[1:]:
                 self.stitch(q)
@@ -1321,7 +1363,10 @@ def _sew_part(sw: Sewing, part: Polygon, top: Polygon, o, center_x):
                     plans.append((p, float(angle)))
                     continue
             plans.append((p, st if st.ok else None))
-    if any(kind is not None for _, kind in plans):
+    # a letter with a stroke wider than a cap's satin (a bold font, sewn large): one even fill over all
+    # of it. Split satin would show a seam down each stem, and its pieces at their own angles a patchwork
+    wide = any(isinstance(kind, Stroke) and kind.width > SATIN_MAX for _, kind in plans)
+    if not wide and any(kind is not None for _, kind in plans):
         kinds, done = [], set()
         for k, (p, kind) in enumerate(_chain(sw, plans, near, o["order"])):
             done.add(id(p))
@@ -1329,7 +1374,7 @@ def _sew_part(sw: Sewing, part: Polygon, top: Polygon, o, center_x):
             kinds.append(_sew_piece(sw, p, kind, o, center_x, near if k == 0 else None, rest))
         return "satin" if kinds.count("satin") >= kinds.count("fill") else "fill"
     angle, longest = _best_satin_angle(top)
-    if longest <= SATIN_MAX:
+    if longest <= SATIN_MAX and not wide:
         a0 = (angle + 90) % 180
         column = 45 <= a0 <= 135        # a column runs up from the bottom, a bar out from the centre
         start = bottom if column else near
@@ -1346,14 +1391,19 @@ def _sew_part(sw: Sewing, part: Polygon, top: Polygon, o, center_x):
     halves = _halves(top, center_x, o["density"])
     sw.runs(edge_run(part, near))
     under = part.buffer(-0.6, join_style=2)
-    for half in halves:
-        for p in _parts(half.intersection(under) if not under.is_empty else half):
-            if p.area > 2:
-                sw.runs(tatami(p, 0.0, 3.0 if light else UNDER_ROW, UNDER_LEN, (center_x, p.bounds[1])))
     density, length = (o["density"] * 1.1, 4.0) if light else (o["density"], FILL_LEN)
-    for half in halves:
-        for p in _parts(half):
-            sw.runs(tatami(p, 90.0, density, length, (center_x, p.bounds[1])), top=True)
+    edge = part.buffer(-EDGE_INSET, join_style=2)       # its edge run's line: travel follows it
+    sw.edge = type("Edge", (), {"rings": [r for q in _parts(edge) for r in [q.exterior, *q.interiors]]})()
+    try:
+        for half in halves:
+            for p in _parts(half.intersection(under) if not under.is_empty else half):
+                if p.area > 2:
+                    sw.runs(tatami(p, 0.0, 3.0 if light else UNDER_ROW, UNDER_LEN, (center_x, p.bounds[1])))
+        for half in halves:
+            for p in _parts(half):
+                sw.runs(tatami(p, 90.0, density, length, (center_x, p.bounds[1])), top=True)
+    finally:
+        sw.edge = None
     return "fill"
 
 
@@ -1535,6 +1585,41 @@ def cap_order(parts, order="bottom", lines=None):
         order += [mid] + right + left
     return order
 
+def _colour_blocks(groups, lines, orders):
+    """The sewing order from the centre, across colours: [(colour index, [its parts' indices])].
+    Each colour's parts in their order (orders), except that where the next of them lies past
+    another colour's part on the same line (the red o between u and y), that part is sewn there, in
+    its thread, so no gap is left between them to sew later. A part is only taken out of its
+    colour's turn when it touches no other colour's part (it is not under or over one)."""
+    def cx(n, i):
+        b = groups[n][i].bounds
+        return (b[0] + b[2]) / 2
+    alone = {(n, i): not any(groups[n][i].distance(q) < 0.3 for m, ps in enumerate(groups) if m != n for q in ps)
+             for n, ps in enumerate(groups) for i in range(len(ps))}
+    taken, blocks = set(), []
+
+    def add(n, i):
+        if blocks and blocks[-1][0] == n:
+            blocks[-1][1].append(i)
+        else:
+            blocks.append((n, [i]))
+    for n, order in enumerate(orders):
+        prev = None
+        for i in order:
+            if (n, i) in taken:
+                continue
+            if prev is not None and lines[n][prev] == lines[n][i]:
+                a, z = cx(n, prev), cx(n, i)
+                between = [(m, j) for m in range(n + 1, len(groups)) for j in range(len(groups[m]))
+                           if (m, j) not in taken and alone[(m, j)] and lines[m][j] == lines[n][i]
+                           and min(a, z) < cx(m, j) < max(a, z)]
+                for m, j in sorted(between, key=lambda mj: abs(cx(*mj) - a)):
+                    add(m, j); taken.add((m, j))
+            add(n, i); taken.add((n, i))
+            prev = i
+    return blocks
+
+
 def digitize(an, opts: dict):
     """an: patch.Analysis. Returns (stitches [(x, y, cmd)], colours [{hex, id}], info)."""
     o = {**DEFAULTS, **{k: v for k, v in (opts or {}).items() if v is not None}}
@@ -1631,27 +1716,35 @@ def digitize(an, opts: dict):
     # the lines of the whole design (every colour's parts), so each colour sews them in the same order
     every = [(n, p) for n, g in enumerate(mm) for p in _parts(g) if p.area >= MIN_PART]
     line_of = dict(zip(((n, p.wkb) for n, p in every), text_lines([p for _, p in every])))
-    for n, c in enumerate(plan):
-        g = mm[n]
-        parts = [p for p in _parts(g) if p.area >= MIN_PART]
-        tiny += len(_parts(g)) - len(parts)
-        if not parts:
-            continue
+    groups = [[p for p in _parts(g) if p.area >= MIN_PART] for g in mm]       # each colour's parts
+    tiny = sum(len(_parts(g)) - len(ps) for g, ps in zip(mm, groups))
+    lines = [[line_of[(n, p.wkb)] for p in ps] for n, ps in enumerate(groups)]
+    orders = [cap_order(ps, o["order"], ln) if ps else [] for ps, ln in zip(groups, lines)]
+    # in which order the colours' parts are sewn: each colour in turn; or, sewing from the centre,
+    # along each line the parts in their places, another colour's part sewn where it stands between
+    # two of this colour's (u, r, then the red o, then y: no gap left to sew later)
+    blocks = ([(n, orders[n]) for n in range(len(plan)) if orders[n]]
+              if o["order"] != "center" or o.get("arrange") or puffed else _colour_blocks(groups, lines, orders))
+    for b, (n, order) in enumerate(blocks):
+        c = plan[n]
+        parts = groups[n]
         if colors:
             sw.trim()
             sw.out.append((sw.at[0], sw.at[1], COLOR)); sw.tied = False
-        colors.append({"id": c["id"], "hex": c["hex"]})
+        again = sum(1 for m, _ in blocks[:b] if m == n)         # a colour sewn in more blocks: "<id>~n"
+        colors.append({"id": c["id"] + (f"~{again}" if again else ""), "hex": c["hex"]})
         if o["tackdown"] and len(colors) == 1:      # under everything, in the first colour's thread
             whole = unary_union(mm)
             sw.router = Router(whole.buffer(o["pull_comp"] + 0.05))
             tack = tack_down(whole, 0.0)
             tacked = len(tack)
             sw.runs(tack)
-        tops = [p.buffer(o["pull_comp"], join_style=1) if o["pull_comp"] else p for p in parts]
-        later = unary_union(mm[n + 1:]).buffer(-0.4) if n + 1 < len(mm) else Polygon()
-        order = cap_order(parts, o["order"], [line_of[(n, p.wkb)] for p in parts])
-        small += sum(1 for p in parts if max(p.bounds[2] - p.bounds[0], p.bounds[3] - p.bounds[1]) < SMALL)
-        thin += sum(1 for p in parts if _width(p) < THIN / 2)
+        tops = [_widened(p, o["pull_comp"]) for p in parts]
+        after = [groups[m][i] for m, ids in blocks[b + 1:] for i in ids]     # sewn later: travel may run under
+        later = unary_union(after).buffer(-0.4) if after else Polygon()
+        if not again:
+            small += sum(1 for p in parts if max(p.bounds[2] - p.bounds[0], p.bounds[3] - p.bounds[1]) < SMALL)
+            thin += sum(1 for p in parts if _width(p) < THIN / 2)
         plans = {i: _puff_plan(tops[i]) for i in order} if c["id"] in puffed else {}
         puffs = [i for i in order if plans.get(i)]
         flat = [i for i in order if i not in puffs]
@@ -1759,7 +1852,7 @@ def sew_shape(geom, opts):
     if not parts:
         raise ValueError("The shape is too small to sew.")
     sw = Sewing()
-    tops = [p.buffer(o["pull_comp"], join_style=1) if o["pull_comp"] else p for p in parts]
+    tops = [_widened(p, o["pull_comp"]) for p in parts]
     sw.router = Router(unary_union(tops).buffer(0.05))
     for i in cap_order(parts, o["order"]):
         _sew_part(sw, parts[i], tops[i], o, 0.0)
@@ -1899,6 +1992,152 @@ def pathfinder(op, shapes, edits=None):
     if not rings:
         raise ValueError("Nothing is left: the shapes do not overlap that way.")
     return rings
+
+
+# ---------------------------------------------------------------------------
+# text: lettering in a font, as outlines the digitizer sews as it sews a drawn shape
+
+FONT_DIR = __import__("pathlib").Path(__file__).resolve().parent / "static" / "fonts"
+# id: (file, name shown) - open fonts (SIL OFL, licences in static/fonts/licenses) in the styles of
+# Wilcom's lettering (its own ESA fonts are licensed with EmbroideryStudio and cannot be shipped)
+TEXT_FONTS = {
+    "block": ("ArchivoBlack.ttf", "Block (Archivo Black)"),
+    "condensed": ("Anton.ttf", "Condensed Block (Anton)"),
+    "swiss": ("Oswald-Bold.ttf", "Narrow Sans (Oswald Bold)"),
+    "tall": ("BebasNeue.ttf", "Tall Block (Bebas Neue)"),
+    "serif": ("LibreBaskerville-Bold.ttf", "Serif (Libre Baskerville Bold)"),
+    "slab": ("AlfaSlabOne.ttf", "Slab Serif (Alfa Slab One)"),
+    "varsity": ("Graduate.ttf", "Varsity / College (Graduate)"),
+    "script": ("GreatVibes.ttf", "Script (Great Vibes)"),
+    "handwriting": ("DancingScript-Bold.ttf", "Handwriting (Dancing Script Bold)"),
+    "casual": ("Pacifico.ttf", "Casual Script (Pacifico)"),
+    "brush": ("KaushanScript.ttf", "Brush Script (Kaushan Script)"),
+    "oldenglish": ("UnifrakturMaguntia.ttf", "Old English (UnifrakturMaguntia)"),
+    "western": ("Rye.ttf", "Western (Rye)"),
+    "rounded": ("Fredoka-SemiBold.ttf", "Rounded (Fredoka SemiBold)"),
+}
+_FONTS = {}
+
+
+def _font(fid):
+    if fid not in TEXT_FONTS:
+        raise ValueError("Unknown font.")
+    if fid not in _FONTS:
+        from fontTools.ttLib import TTFont
+        _FONTS[fid] = TTFont(str(FONT_DIR / TEXT_FONTS[fid][0]))
+    return _FONTS[fid]
+
+
+def _glyph_rings(gs, name, tol):
+    """A glyph's outlines as point lists (font units), its curves split into short lines."""
+    from fontTools.pens.basePen import BasePen
+
+    class Flat(BasePen):
+        def __init__(self):
+            super().__init__(gs)
+            self.rings, self.cur = [], []
+
+        def _moveTo(self, p):
+            self._end(); self.cur = [p]
+
+        def _lineTo(self, p):
+            self.cur.append(p)
+
+        def _curveToOne(self, p1, p2, p3):      # quadratic curves arrive here as cubics (BasePen)
+            p0 = self.cur[-1]
+            n = max(2, min(40, int(math.dist(p0, p1) + math.dist(p1, p2) + math.dist(p2, p3)) // max(tol, 1e-6) + 1))
+            for k in range(1, int(n) + 1):
+                t = k / n; u = 1 - t
+                self.cur.append(tuple(u ** 3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t ** 3 * d
+                                      for a, b, c, d in zip(p0, p1, p2, p3)))
+
+        def _closePath(self):
+            self._end()
+
+        def _endPath(self):
+            self._end()
+
+        def _end(self):
+            if len(self.cur) >= 3:
+                self.rings.append(self.cur)
+            self.cur = []
+    pen = Flat()
+    gs[name].draw(pen)
+    pen._end()
+    return pen.rings
+
+
+def _glyph_shape(rings):
+    """A glyph's area: its outlines filled as fonts fill them (the outer outlines one way round, the
+    holes the other: a letter's strokes that cross each other are one area, an o's middle is a hole)."""
+    polys = [(Polygon(r), shapely.geometry.LinearRing(r).is_ccw) for r in rings if len(r) >= 3]
+    polys = [(shapely.make_valid(p), ccw) for p, ccw in polys if abs(p.area) > 0]
+    if not polys:
+        return Polygon()
+    outer = max(polys, key=lambda pc: pc[0].area)[1]     # the largest outline is an outer one
+    keep = unary_union([p for p, ccw in polys if ccw == outer])
+    holes = [p for p, ccw in polys if ccw != outer]
+    return keep.difference(unary_union(holes)) if holes else keep
+
+
+def text_outline(text, font="block", height_mm=10.0, spacing_mm=0.0, align="center", line_gap=1.35):
+    """Lettering as outlines: {rings [[x, y] mm, y up, centred on 0], width_mm, height_mm, missing
+    [characters the font lacks]}. height_mm is the capital letters' height (as Wilcom's lettering is
+    sized); spacing_mm is added between letters; lines (\\n) are line_gap x the height apart."""
+    text = str(text or "").replace("\r", "")[:200]
+    if not text.strip():
+        raise ValueError("Type some text first.")
+    height_mm = min(max(float(height_mm), 2.0), 200.0)
+    f = _font(font)
+    gs, cmap = f.getGlyphSet(), f.getBestCmap()
+    # the capitals' height, measured on the H's own outline (a font's figure for it can be wrong: Rye's
+    # is a quarter; and a glyph's stored top can be stale: UnifrakturMaguntia's)
+    h = cmap.get(ord("H"))
+    cap = max((y for r in _glyph_rings(gs, h, 1.0) for _x, y in r), default=0) if h else 0
+    cap = cap or getattr(f.get("OS/2"), "sCapHeight", 0) or f["head"].unitsPerEm * 0.7
+    k = height_mm / cap                          # mm per font unit
+    tol = 0.04 / k                               # curves within about 0.04 mm
+    kern = {}
+    if "kern" in f:
+        for sub in getattr(f["kern"], "kernTables", []):
+            kern.update(getattr(sub, "kernTable", {}) or {})
+    lines, missing, widths = [], set(), []
+    for n, line in enumerate(text.split("\n")):
+        x, prev, shapes = 0.0, None, []
+        for ch in line:
+            g = cmap.get(ord(ch))
+            if g is None:
+                if not ch.isspace():
+                    missing.add(ch)
+                g = cmap.get(32)
+                if g is None:
+                    continue
+            if prev is not None:
+                x += kern.get((prev, g), 0) * k
+            adv = f["hmtx"][g][0] * k
+            rings = _glyph_rings(gs, g, tol)
+            if rings:
+                s = _glyph_shape(rings)
+                if not s.is_empty:
+                    shapes.append(affinity.translate(affinity.scale(s, k, k, origin=(0, 0)), x, -n * line_gap * height_mm))
+            x += adv + spacing_mm
+            prev = g
+        lines.append(shapes)
+        widths.append(max(x - spacing_mm, 0.0))
+    parts = []
+    for shapes, w in zip(lines, widths):
+        dx = {"left": 0.0, "right": -w}.get(align, -w / 2)
+        parts += [affinity.translate(s, dx, 0) for s in shapes]
+    g = shapely.make_valid(unary_union(parts)) if parts else Polygon()
+    if g.is_empty:
+        raise ValueError("This font has none of these characters.")
+    x0, y0, x1, y1 = g.bounds
+    g = affinity.translate(g, -(x0 + x1) / 2, -(y0 + y1) / 2).simplify(0.02)
+    rings = []
+    for p in _parts(g):
+        for ring in [p.exterior, *p.interiors]:
+            rings.append([[round(x, 3), round(y, 3)] for x, y in list(ring.coords)[:-1]])
+    return {"rings": rings, "width_mm": round(x1 - x0, 2), "height_mm": round(y1 - y0, 2), "missing": sorted(missing)}
 
 
 def _edited(color_id, g, edits):

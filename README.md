@@ -257,6 +257,17 @@ threads in sewing order.
 - Rings with something standing out of them (the ear of a g) are cut there: the ring is sewn
   round, the ear on its own; a short piece (a serif, an ear, a star's point) is a satin at one
   angle, not a turning satin that fans out.
+- A letter with a stroke wider than a cap's satin (5 mm: a bold font sewn large) is one even fill
+  over the whole letter, not split satin (a seam down each stem) or pieces at their own angles (a
+  patchwork). The fill travels between its sections along its edge ("travel on edge", as
+  Wilcom's fills), so it needs no trims inside the letter.
+- Across colours, from the centre: along a line, where the next part of a colour lies past
+  another colour's part (the red o between u and y), that part is sewn there, in its thread (a
+  colour change more, as the next block "<id>~n"), so no gap is left between them; only parts
+  that touch no other colour move (layering stays). Parts at a line's ends keep their colour's turn.
+- Small lettering (strokes under 2 mm in a part under 16 mm) gets half the pull compensation, so
+  its letters stay slim and apart; holes under 1 mm2 (a tiny e's eye) cannot be sewn open and are
+  filled, so the letter is cut into clean strokes round them.
 - Sewing starts: at the centre, the default (the part nearest the middle first, its line first, the stroke
   there cut and sewn outwards both ways, then outwards; Wilcom's 3D WTS file starts there), or
   at the bottom (the lowest row first, its middle part, then right, then left, as the Wilcom
@@ -331,6 +342,17 @@ threads in sewing order.
   and the corner: Round, Chamfer or Inverted round. The sharp outline is kept with the shape, so the
   corners can be changed again at any time; a shape already sewn becomes a drawn shape again (where
   it was moved to) and is sewn with its new corners on Update Digitizing.
+- Text (tool strip, T): type lettering (Return for more lines), pick a font, the capital letters'
+  height in mm (as Wilcom sizes lettering), letter spacing, line alignment and the thread, and Add
+  text: it goes in the middle of the view, selected, to move, resize, turn or recolour like a shape,
+  and is sewn with the logo (on an opened DST, at once). A text not sewn yet, selected, is changed
+  in the same panel (Update text). The server turns it into outlines with fontTools
+  (`digitize.text_outline`, `/api/cap/text`), and they are digitized as a drawn shape is: satin on
+  strokes, fill where wide. The 14 fonts (`static/fonts`) are open fonts (SIL Open Font License,
+  licences in `static/fonts/licenses`) in the styles of Wilcom's lettering: Block, Condensed Block,
+  Narrow Sans, Tall Block, Serif, Slab Serif, Varsity / College, Script, Handwriting, Casual Script,
+  Brush Script, Old English, Western and Rounded. Wilcom's own (ESA) fonts are licensed with
+  EmbroideryStudio and cannot be shipped.
 - Pathfinder (tool strip): select two or more shapes you drew (drawn or already sewn), then Unite
   (one shape), Minus Front (the back shape less the ones in front), Intersect (only the overlap) or
   Exclude (the overlap cut out), as Illustrator's. The result is one new shape, with holes where

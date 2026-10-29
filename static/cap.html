@@ -48,6 +48,7 @@
       <button type="button" id="toolSelect" title="Select: click a piece, shift-click to add, or drag a box; drag to move, a corner to resize, the knob to turn; arrows nudge, Delete removes, Esc deselects" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 8-6 2-3 6z" fill="currentColor"/></svg></button>
       <button type="button" id="toolShapes" title="Shapes: pick one, then drag on the design (shift: even)" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="4.5"/><rect x="11.5" y="11.5" width="9" height="9" rx="1"/></svg></button>
       <button type="button" id="toolPen" title="Pen: click to place points, drag to curve; click the first point to close a shape, Enter for a line" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l3.5-1 11-11a2.1 2.1 0 0 0-3-3l-11 11z"/><path d="M14 6.5l3 3"/></svg></button>
+      <button type="button" id="toolText" title="Text: type lettering in a font, set its height, and add it to the design" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg></button>
       <button type="button" id="toolCorners" title="Corners: round, chamfer or invert the corners of a shape you drew (or drag the dots in its corners)" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V11a7 7 0 0 1 7-7h9"/><circle cx="9" cy="9" r="1.6" fill="currentColor"/></svg></button>
       <button type="button" id="toolPathfinder" title="Pathfinder: unite, minus front, intersect or exclude the shapes you drew" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="3" width="11" height="11" fill="currentColor"/><rect x="8" y="8" width="13" height="13"/></svg></button>
       <button type="button" id="toolAlign" title="Align and distribute the selected pieces" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3v18"/><rect x="5" y="5" width="9" height="5" fill="currentColor" stroke="none"/><rect x="5" y="14" width="15" height="5" fill="currentColor" stroke="none"/></svg></button>
@@ -270,6 +271,32 @@
     </select>
   </div>
   <div class="cp-draw-row"><span>Thread</span><button type="button" class="ghost" id="penThread"><span class="sw"></span><span class="nm">Pick</span></button></div>
+</div>
+<div class="cp-draw cp-text" id="textMenu" hidden role="dialog" aria-label="Text">
+  <div class="cp-pal-head"><b>Text</b><button type="button" class="ghost" id="textClose" aria-label="Close">✕</button></div>
+  <textarea id="textInput" rows="2" placeholder="Type your text (Return for a new line)" aria-label="Text"></textarea>
+  <div class="cp-draw-row"><span>Font</span>
+    <select id="textFont" aria-label="Font">
+      <option value="block">Block</option><option value="condensed">Condensed Block</option><option value="swiss">Narrow Sans</option>
+      <option value="tall">Tall Block</option><option value="serif">Serif</option><option value="slab">Slab Serif</option>
+      <option value="varsity">Varsity / College</option><option value="script">Script</option><option value="handwriting">Handwriting</option>
+      <option value="casual">Casual Script</option><option value="brush">Brush Script</option><option value="oldenglish">Old English</option>
+      <option value="western">Western</option><option value="rounded">Rounded</option>
+    </select>
+  </div>
+  <div class="cp-text-preview" id="textPreview" aria-hidden="true">Your Text</div>
+  <div class="cp-draw-row"><span>Height</span>
+    <span class="cp-corner-r"><input type="number" id="textHeight" min="3" max="100" step="0.5" value="8" aria-label="Capital height in mm"> mm</span>
+  </div>
+  <div class="cp-draw-row"><span>Letter spacing</span>
+    <span class="cp-corner-r"><input type="number" id="textSpacing" min="-3" max="10" step="0.1" value="0" aria-label="Letter spacing in mm"> mm</span>
+  </div>
+  <div class="cp-draw-row"><span>Lines</span>
+    <select id="textAlign" aria-label="Line alignment"><option value="center">Centred</option><option value="left">Left</option><option value="right">Right</option></select>
+  </div>
+  <div class="cp-draw-row"><span>Thread</span><button type="button" class="ghost" id="textThread"><span class="sw"></span><span class="nm">Pick</span></button></div>
+  <button type="button" class="primary" id="textAdd">Add text</button>
+  <p class="hint" id="textHint">Height is the capital letters' height, as Wilcom sizes lettering; 5 mm or more sews cleanly on a cap. The text goes in the middle of the view, selected: drag it into place. Fonts in the styles of Wilcom's lettering (open fonts; Wilcom's own come only with EmbroideryStudio).</p>
 </div>
 <div class="cp-palette" id="palette" hidden role="dialog" aria-label="Thread palette">
   <div class="cp-pal-head"><b id="palTitle">Threads</b><button type="button" class="ghost" id="palClose" aria-label="Close">✕</button></div>

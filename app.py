@@ -402,16 +402,23 @@ def cap_dst_open():
 
 @app.post("/api/cap/shape")
 def cap_shape():
-    """A shape or pen line drawn on an opened DST (pts in 0.1 mm, closed or a line width_mm wide),
-    digitized: its stitches [x, y, command] in 0.1 mm."""
+    """A shape or pen line drawn on an opened DST (pts in 0.1 mm, closed or a line width_mm wide;
+    or rings in 0.1 mm, filled even-odd: text), digitized: its stitches [x, y, command] in 0.1 mm."""
+    import shapely
     from shapely.geometry import LineString, Polygon
     body = request.get_json(force=True)
     try:
         pts = [(float(x) / 10, float(y) / 10) for x, y in body.get("pts") or []]
-        if len(pts) < 2:
+        if body.get("rings"):           # text: its outlines, a ring inside another a hole
+            geom = Polygon()
+            for r in body["rings"]:
+                if len(r) >= 3:
+                    geom = geom.symmetric_difference(shapely.make_valid(Polygon([(float(x) / 10, float(y) / 10) for x, y in r])))
+        elif len(pts) < 2:
             return jsonify(error="Draw a little more."), 400
-        geom = Polygon(pts) if body.get("closed") and len(pts) >= 3 else \
-            LineString(pts).buffer(max(float(body.get("width_mm") or 1.5), 0.5) / 2, cap_style=1, join_style=1)
+        else:
+            geom = Polygon(pts) if body.get("closed") and len(pts) >= 3 else \
+                LineString(pts).buffer(max(float(body.get("width_mm") or 1.5), 0.5) / 2, cap_style=1, join_style=1)
         st = digitize.sew_shape(geom, body.get("options") or {})
     except ValueError as e:
         return jsonify(error=str(e)), 400
@@ -419,6 +426,22 @@ def cap_shape():
         logging.exception("request failed")
         return jsonify(error=f"Could not sew the shape: {e}"), 500
     return jsonify(stitches=[[round(x * 10), round(y * 10), c] for x, y, c in st])
+
+
+@app.post("/api/cap/text")
+def cap_text():
+    """Lettering in one of the fonts (digitize.TEXT_FONTS) as outlines: rings in mm (y up, centred
+    on 0), its size, and the characters the font lacks."""
+    body = request.get_json(force=True)
+    try:
+        return jsonify(digitize.text_outline(body.get("text"), body.get("font") or "block",
+                                             body.get("height_mm") or 10, body.get("spacing_mm") or 0,
+                                             body.get("align") or "center"))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:
+        logging.exception("request failed")
+        return jsonify(error=f"Could not set the text: {e}"), 500
 
 
 @app.post("/api/cap/pathfinder")

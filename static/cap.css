@@ -102,3 +102,27 @@ body:not(.dst-mode) .dst-only { display: none !important; }
 .cp-draw-row .sw { width: 18px; height: 18px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2); }
 .cp-draw .hint { margin: 0; }
 .cp-tools button[aria-pressed="true"] { background: color-mix(in srgb, #0a84ff 14%, transparent); color: #0a84ff; border-color: color-mix(in srgb, #0a84ff 40%, transparent); }
+
+/* text (cap-edit.js): the fonts (static/fonts, SIL Open Font License), to preview the lettering */
+@font-face { font-family: "emb-block"; src: url("/static/fonts/ArchivoBlack.ttf"); font-display: swap; }
+@font-face { font-family: "emb-condensed"; src: url("/static/fonts/Anton.ttf"); font-display: swap; }
+@font-face { font-family: "emb-swiss"; src: url("/static/fonts/Oswald-Bold.ttf"); font-display: swap; }
+@font-face { font-family: "emb-tall"; src: url("/static/fonts/BebasNeue.ttf"); font-display: swap; }
+@font-face { font-family: "emb-serif"; src: url("/static/fonts/LibreBaskerville-Bold.ttf"); font-display: swap; }
+@font-face { font-family: "emb-slab"; src: url("/static/fonts/AlfaSlabOne.ttf"); font-display: swap; }
+@font-face { font-family: "emb-varsity"; src: url("/static/fonts/Graduate.ttf"); font-display: swap; }
+@font-face { font-family: "emb-script"; src: url("/static/fonts/GreatVibes.ttf"); font-display: swap; }
+@font-face { font-family: "emb-handwriting"; src: url("/static/fonts/DancingScript-Bold.ttf"); font-display: swap; }
+@font-face { font-family: "emb-casual"; src: url("/static/fonts/Pacifico.ttf"); font-display: swap; }
+@font-face { font-family: "emb-brush"; src: url("/static/fonts/KaushanScript.ttf"); font-display: swap; }
+@font-face { font-family: "emb-oldenglish"; src: url("/static/fonts/UnifrakturMaguntia.ttf"); font-display: swap; }
+@font-face { font-family: "emb-western"; src: url("/static/fonts/Rye.ttf"); font-display: swap; }
+@font-face { font-family: "emb-rounded"; src: url("/static/fonts/Fredoka-SemiBold.ttf"); font-display: swap; }
+.cp-text { width: 290px; }
+.cp-text textarea { width: 100%; min-height: 54px; resize: vertical; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px;
+  font: inherit; font-size: 14px; background: var(--panel); color: var(--ink); }
+.cp-text select { max-width: 170px; }
+.cp-text input[type=number] { width: 64px; }
+.cp-text-preview { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: #1d1d1b;
+  font-size: 26px; line-height: 1.25; white-space: pre-wrap; overflow: hidden; max-height: 92px; text-align: center; }
+.cp-text #textAdd { height: 34px; }
