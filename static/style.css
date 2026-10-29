@@ -1,13 +1,9 @@
 :root {
-  --bg: #f4f5f7; --panel: #ffffff; --ink: #1d2230; --muted: #667085; --line: #e3e6ec;
+  --bg: #ffffff; --panel: #ffffff; --ink: #1d2230; --muted: #667085; --line: #e3e6ec;
   --accent: #ff5a1f; --accent-ink: #ffffff; --sel: #2f6bff; --danger: #d92d20;
   --check-a: #ffffff; --check-b: #e9ebf0;
   font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-  color-scheme: light dark;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #14161b; --panel: #1d2027; --ink: #e8eaf0; --muted: #98a2b3; --line: #2c313b;
-          --check-a: #2a2d34; --check-b: #23262c; }
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
@@ -20,16 +16,33 @@ button.ghost { background: transparent; }
 select, input[type=number] { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 [hidden] { display: none !important; }
 
-.top { height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.brand { font-size: 17px; }
+/* the header: the EMB Pros logo on the left, the tools as tabs on the right, the open one in orange */
+.top { height: 64px; display: flex; align-items: stretch; gap: 24px; padding: 0 0 0 24px; background: var(--panel);
+  border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; flex: none; }
+.brand img { height: 47px; width: auto; display: block; }
 .logo { color: var(--accent); }
-.nav { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }   /* four links: scroll sideways on a narrow window */
-.pantone-page .nav { flex: 1; }
-.nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
-.nav a:hover { color: var(--ink); background: var(--bg); }
-.nav a[aria-current=page] { color: var(--ink); background: var(--bg); font-weight: 600; }
-.file-info { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.top-actions { display: flex; gap: 8px; }
+.nav { display: flex; align-items: stretch; margin-left: auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav a { position: relative; display: flex; align-items: center; padding: 0 20px; color: var(--ink); text-decoration: none;
+  font-size: 13px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; transition: color .15s, background .15s; }
+.nav a:hover { color: var(--accent); }
+.nav a[aria-current=page] { background: var(--accent); color: var(--accent-ink); }
+.nav a[aria-current=page]::after { content: ""; position: absolute; left: 50%; bottom: 9px; margin-left: -5px;
+  border: 5px solid transparent; border-top-color: currentColor; border-bottom: 0; }
+.file-info { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+/* a page's buttons: a row at the top of its work area */
+.stage-bar { position: absolute; top: 16px; left: 64px; right: 64px; z-index: 3; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; pointer-events: none; }
+.stage-bar > * { pointer-events: auto; }
+.stage-bar .top-actions button { min-width: 120px; height: 40px; padding: 0 18px; border-radius: 8px; font-weight: 600;
+  background: var(--panel); box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.stage-bar .top-actions button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+.stage-bar .file-info { font-size: 12px; max-width: 100%; }
+.stage-bar .file-info:empty { display: none; }
+.pt-stage:has(> .stage-bar) { padding-top: 96px; }
+.toolbar .file-info { margin-left: auto; flex: 0 1 auto; }
 
 .landing { max-width: 760px; margin: 0 auto; padding: 56px 16px; text-align: center; }
 .landing h1 { font-size: 34px; margin: 0 0 8px; }
@@ -41,7 +54,7 @@ select, input[type=number] { background: var(--panel); border: 1px solid var(--l
 .drop-sub { color: var(--muted); margin-bottom: 8px; }
 .as-button { display: inline-block; padding: 9px 18px; border-radius: 8px; }
 
-.workspace { display: grid; grid-template-columns: 1fr 320px; height: calc(100% - 56px); }
+.workspace { display: grid; grid-template-columns: 1fr 320px; height: calc(100% - 64px); }
 .canvas-col { display: flex; flex-direction: column; min-width: 0; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -136,3 +149,12 @@ dialog::backdrop { background: rgb(0 0 0 / .35); }
   .panel { border-left: 0; border-top: 1px solid var(--line); }
   .grid { grid-template-columns: 1fr; }
 }
+
+/* a question before the work on the page is lost (a div, not <dialog>: macOS 11's WebKit lacks it) */
+.pt-modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / .45); }
+.pt-modal[hidden] { display: none; }
+.pt-modal-box { width: min(420px, 100%); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: 0 16px 48px rgb(0 0 0 / .35); }
+.pt-modal-box h2 { margin: 0 0 8px; font-size: 17px; }
+.pt-modal-box p { margin: 0 0 18px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.pt-modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.pt-modal-actions .danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }

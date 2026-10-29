@@ -3,30 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gang Sheet</title>
+<title>Gang Sheet Maker · EMB Pros</title>
+<link rel="icon" href="/static/emb-pros-logo.svg">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/patch.css">
 <link rel="stylesheet" href="/static/gang.css">
 </head>
 <body class="patch-page">
 <header class="top">
-  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
-  <nav class="nav">
-    <a href="/">Vectorizer</a>
-    <a href="/pantone">Pantone match</a>
-    <a href="/thread">Thread match</a>
-    <a href="/patch">Patch mockup</a>
-    <a href="/gang" aria-current="page">Gang sheet</a>
+  <a class="brand" href="/" title="EMB Pros"><img src="/static/emb-pros-logo.svg" alt="EMB Pros" width="214" height="47"></a>
+  <nav class="nav" aria-label="Tools">
+    <a href="/">Logo Vectorizer</a>
+    <a href="/pantone">Pantone Match</a>
+    <a href="/thread">Thread Match</a>
+    <a href="/patch">Patch Mockup</a>
+    <a href="/gang" aria-current="page">Gang Sheet Maker</a>
+    <a href="/cap">DST Maker</a>
   </nav>
-  <div class="file-info" id="fileInfo"></div>
-  <div class="top-actions">
-    <button class="ghost" id="newLogo">Choose logo</button>
-    <button class="primary" id="download" disabled>Download</button>
-  </div>
 </header>
 
 <main class="pt">
-  <section class="pt-stage" id="stage">
+  <section class="pt-stage pt-fit gs-stage" id="stage">
+    <div class="stage-bar" id="stageBar">
+      <div class="top-actions">
+        <button class="ghost" id="newLogo">Add logo</button>
+        <button class="primary" id="download" disabled>Download</button>
+      </div>
+      <div class="file-info" id="fileInfo"></div>
+    </div>
+    <div class="gs-sheet" id="sheet" aria-hidden="true" hidden></div>
     <label class="drop pt-drop" id="drop">
       <input type="file" id="fileInput" accept=".pdf,.ai,.svg,.eps,image/png,image/jpeg,image/webp,image/tiff,image/gif,image/bmp" hidden>
       <div class="drop-icon">⬆</div>
@@ -38,18 +43,19 @@
     <div class="gs-overlay" id="overlay" hidden></div>
     <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">Filling the sheet…</span></div>
     <div class="pt-status" id="status"></div>
+    <div class="gs-pop" id="pop" hidden role="dialog" aria-labelledby="popTitle">
+      <b id="popTitle">Put logos here</b>
+      <div class="gs-pop-logos" id="popLogos" role="radiogroup" aria-label="Logo"></div>
+      <input type="file" id="popFile" accept=".pdf,.ai,.svg,image/png,image/jpeg,image/webp,image/tiff,image/gif,image/bmp" hidden>
+      <div class="row gs-dims"><label>Width <input type="number" id="popW" min="0.01" step="0.01"></label>
+        <label>Height <input type="number" id="popH" min="0.01" step="0.01"></label><span class="unit-label"></span></div>
+      <div class="row gs-dims"><label>Quantity <input type="number" id="popQty" min="1" step="1" value="1"></label></div>
+      <p class="gs-pop-note" id="popNote"></p>
+      <div class="gs-pop-act"><button type="button" id="popCancel">Cancel</button><button type="button" class="primary" id="popAdd">Add to sheet</button></div>
+    </div>
   </section>
 
   <aside class="panel pt-panel" id="panel">
-    <details open>
-      <summary>Logo</summary>
-      <div class="gs-logo" id="logoCard" hidden>
-        <img id="logoThumb" alt="">
-        <div><b id="logoName"></b><small id="logoKind"></small></div>
-      </div>
-      <p class="hint" id="logoHint">PDF, AI (saved PDF compatible) and SVG logos stay vector in PDF and AI sheets. EPS logos cannot be read on a Mac: save them as PDF first.</p>
-    </details>
-
     <details open>
       <summary>Sheet</summary>
       <div class="row"><span class="lbl">Size</span>
@@ -68,22 +74,30 @@
           <option value="22x120in">DTF 22 × 120 in</option>
           <option value="custom">Custom</option>
         </select>
+        <select id="unit" aria-label="Units for every size" title="Every size on this page in this unit (px: at the Download dpi)"><option value="mm">mm</option><option value="cm">cm</option><option value="in" selected>in</option><option value="px">px</option></select>
       </div>
       <div class="row gs-dims">
         <label>Width <input type="number" id="sheetW" min="0.1" step="0.01" value="8.5"></label>
         <label>Height <input type="number" id="sheetH" min="0.1" step="0.01" value="11"></label>
-        <select id="unit" aria-label="Units"><option value="in">in</option><option value="cm">cm</option><option value="mm">mm</option></select>
+        <span class="unit-label"></span>
       </div>
+      <div class="row"><span class="lbl">Sheet colour</span>
+        <input type="color" id="sheetColor" value="#ffffff" title="The sheet's colour on screen">
+        <button type="button" class="ghost" id="sheetWhite">White</button>
+      </div>
+      <p class="hint">How the sheet looks here (a shirt's colour, say); the files you download stay transparent.</p>
     </details>
 
     <details open>
-      <summary>Logo size &amp; spacing</summary>
-      <div class="row gs-dims">
-        <label>Width <input type="number" id="logoW" min="0.01" step="0.01" value="1.5"></label>
-        <label>Height <input type="number" id="logoH" min="0.01" step="0.01" value="1.5"></label>
-        <span class="unit-label"></span>
-      </div>
-      <label class="check"><input type="checkbox" id="keep" checked> Keep the logo's proportions</label>
+      <summary>Logos</summary>
+      <div class="gs-logos" id="logoList"></div>
+      <div class="row small"><button type="button" id="addLogo" hidden>+ Add another logo</button></div>
+      <label class="check" id="keepRow" hidden><input type="checkbox" id="keep" checked> Keep each logo's proportions</label>
+      <p class="hint" id="logoHint">Give each logo its own size and quantity; one logo can fill the rest of the sheet. The sheet arranges them for you. PDF, AI (saved PDF compatible) and SVG logos stay vector in PDF and AI sheets. EPS logos cannot be read on a Mac: save them as PDF first.</p>
+    </details>
+
+    <details open>
+      <summary>Spacing</summary>
       <div class="row gs-dims">
         <label>Gap <input type="number" id="gap" min="0" step="0.01" value="0.125"></label>
         <label>Margin <input type="number" id="margin" min="0" step="0.01" value="0.25"></label>
@@ -93,7 +107,7 @@
       <label class="check"><input type="checkbox" id="boxes"> Box around each logo</label>
       <label class="check"><input type="checkbox" id="border" checked> Sheet border</label>
       <p class="gs-count" id="count"></p>
-      <p class="hint" id="removeHint" hidden>Click a logo to take it off the sheet (click again to put it back); the round buttons beside the rows do a whole row. The sheet keeps its size and every other logo its place.</p>
+      <p class="hint" id="removeHint" hidden>Click a logo to take it off the sheet; the round buttons beside the rows take off a whole row. Click an empty place (+) to put a logo there: the same one, another logo on the sheet or a new one, with its size and quantity.</p>
       <div class="row small"><button type="button" id="undo" disabled title="Undo (⌘Z / Ctrl+Z)">↶ Undo</button>
         <button type="button" id="restoreAll" hidden>Put all logos back</button></div>
     </details>
@@ -118,6 +132,7 @@
   </aside>
 </main>
 <div class="toast" id="toast" hidden></div>
+<script src="/static/leave.js"></script>
 <script src="/static/gang.js"></script>
 </body>
 </html>

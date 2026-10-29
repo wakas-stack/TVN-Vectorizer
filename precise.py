@@ -72,10 +72,15 @@ def shares(rgb: np.ndarray, alpha: np.ndarray, palette: np.ndarray, lab_px: np.n
         is_flat = (step < 16).ravel()
         near_all = np.empty(H * W, np.int32)
         exact = np.empty(H * W, bool)
+        clear = np.empty(H * W, bool)
         for i in range(0, H * W, 400_000):
             d = ((lab[i:i + 400_000, None, :] - lab_pal[None]) ** 2).sum(-1)
             near_all[i:i + 400_000] = d.argmin(1)
             exact[i:i + 400_000] = d.min(1) < 16
+            # clearly one colour: within 30 of it and under half as far as from any other (small,
+            # blurred lettering far from any solid patch of its colour still counts as that colour)
+            dd = np.partition(d, 1, axis=1)[:, :2] if n > 1 else np.stack([d[:, 0], d[:, 0] * 0 + 1e9], 1)
+            clear[i:i + 400_000] = (dd[:, 0] < 900) & (dd[:, 0] < 0.25 * dd[:, 1])
         # a pixel between two other colours whose own colour is just their mix is their
         # anti-aliasing, not a colour of its own: the half-black, half-sand pixels along a black
         # outline match an engraved brown, but they do not make the brown present there
@@ -98,7 +103,7 @@ def shares(rgb: np.ndarray, alpha: np.ndarray, palette: np.ndarray, lab_px: np.n
             seg = pa - pb
             t = np.clip(((pc - pb) * seg).sum(1) / np.maximum((seg * seg).sum(1), 1e-6), 0, 1)
             wedged[idx2] = (np.linalg.norm(pb + t[:, None] * seg - pc, axis=1) < 25) & (t > 0.08) & (t < 0.92)
-        sure = (is_flat | exact) & ~wedged
+        sure = (is_flat | exact | clear) & ~wedged
         present = np.zeros((n, H * W), bool)
         present[near_all[sure], np.nonzero(sure)[0]] = True
         base = present.reshape(n, H, W)
@@ -306,46 +311,187 @@ def _end_tangent(P, k=3):
     return _unit(P[min(k, len(P) - 1)] - P[0])
 
 
-def fit_loop(pts, err=0.5, corner_deg=60):
-    """A closed subpath [("M", p), ("C", ...), ...] of cubic Beziers through a dense loop."""
+def _turn(Ps, m):
+    """Turning angle (degrees) at every point of a closed polyline, between the chords m points back
+    and m points ahead."""
+    v1 = Ps - np.roll(Ps, m, 0); v2 = np.roll(Ps, -m, 0) - Ps
+    cosang = (v1 * v2).sum(1) / np.maximum(np.linalg.norm(v1, axis=1) * np.linalg.norm(v2, axis=1), 1e-9)
+    return np.degrees(np.arccos(np.clip(cosang, -1, 1)))
+
+
+def _intersect(p, d, q, e):
+    """Where the line through p along d meets the line through q along e, or None when parallel."""
+    den = d[0] * e[1] - d[1] * e[0]
+    if abs(den) < 0.15:                      # closer than about 9 degrees: no clear meeting point
+        return None
+    t = ((q[0] - p[0]) * e[1] - (q[1] - p[1]) * e[0]) / den
+    return p + t * d
+
+
+def _direction(Q):
+    """Main direction of a short run of points, from first to last (least squares)."""
+    c = Q - Q.mean(0)
+    _, _, vt = np.linalg.svd(c, full_matrices=False)
+    d = vt[0]
+    return d if np.dot(d, Q[-1] - Q[0]) >= 0 else -d
+
+
+def fit_loop(pts, err=0.5, corner_deg=60, density=1):
+    """A closed subpath [("M", p), ("L" | "C", ...), ...] through a dense loop (see fit_chain)."""
+    return fit_chain(pts, True, err, corner_deg)
+
+
+def fit_chain(pts, closed, err=0.5, corner_deg=60, end_trim=0.9, line_tol=None, corner_trim=0.9, arm=2.0, reach=2.5,
+              detect=None, far=0.0):
+    """[("M", p), ("L" | "C", ...), ...] through a dense run of outline points.
+
+    Corners are found where the outline turns sharply over about 2 px and keeps turning as
+    sharply over 1 px (a circle's turn halves). Pixels round a corner off, so each corner is
+    rebuilt where the straight-on directions of its two sides meet. Each side is then a straight
+    line when it is one, else cubic Beziers (Schneider). An open run (an edge between two
+    junctions) keeps its two end points exactly, so the edges meeting there still meet.
+
+    detect: the same run less smoothed (point for point). Corners are found on it, where they
+    are still sharp and two close corners (the end of a thin stroke) are still two; the sides
+    are fitted to pts, smoothed enough that noise is gone."""
     P = np.asarray(pts, np.float64)
     n = len(P)
-    if n < 6:
+    if n < 2:
+        return [("M", tuple(P[0]))]
+    if closed and n < 6:
         return [("M", tuple(P[0]))] + [("L", tuple(p)) for p in P[1:]]
-    # light smoothing of the marching-squares points (keeps corners: done before finding them)
-    Ps = (np.roll(P, 1, 0) + 2 * P + np.roll(P, -1, 0)) / 4
-    # corners: where the outline turns sharply over a few points, the sharpest in its neighbourhood
-    k = 3 if n > 24 else 1
-    v1 = Ps - np.roll(Ps, k, 0); v2 = np.roll(Ps, -k, 0) - Ps
-    cosang = (v1 * v2).sum(1) / np.maximum(np.linalg.norm(v1, axis=1) * np.linalg.norm(v2, axis=1), 1e-9)
-    turn = np.degrees(np.arccos(np.clip(cosang, -1, 1)))
-    is_c = turn > corner_deg
-    for s in range(1, k + 1):
-        is_c &= (turn >= np.roll(turn, s)) & (turn > np.roll(turn, -s))
-    corners = list(np.nonzero(is_c)[0])
-    use = np.where(np.isin(np.arange(n), corners)[:, None], P, Ps)   # corners keep their exact point
+    if closed:
+        Ps = (np.roll(P, 1, 0) + 2 * P + np.roll(P, -1, 0)) / 4      # light smoothing
+        total = float(np.linalg.norm(Ps - np.roll(Ps, 1, 0), axis=1).sum())
+    else:
+        Ps = P.copy()
+        if n > 2:
+            Ps[1:-1] = (P[:-2] + 2 * P[1:-1] + P[2:]) / 4
+        total = float(np.linalg.norm(np.diff(Ps, axis=0), axis=1).sum())
+    ppx = n / max(total, 1e-9)                                   # points per pixel of outline
+    D = Ps if detect is None else np.asarray(detect, np.float64)
+    # a corner turns as sharply over half the arm as over the arm; a curve turns half as much
+    m2 = max(1, int(round(arm * ppx)))
+    m1 = max(1, int(round(arm / 2 * ppx)))
     err2 = err * err
-    beziers = []
-    if not corners:
+
+    if not closed and (total < 1.5 or n < 4):
+        return [("M", tuple(P[0])), ("L", tuple(P[-1]))]
+
+    corners = []
+    # and still turns over twice the arm: a wiggle of noise along a curve turns sharply over a
+    # pixel or two but not over four; a real corner does
+    m4 = 2 * m2
+    if closed and n > 4 * m2:
+        t2, t1 = _turn(D, m2), _turn(D, m1)
+        is_c = (t2 > corner_deg) & (t1 > 0.62 * t2)
+        if n > 4 * m4:
+            is_c &= _turn(D, m4) > far * corner_deg
+        for s in range(1, m2 + 1):                                # the sharpest point around
+            is_c &= (t2 >= np.roll(t2, s)) & (t2 > np.roll(t2, -s))
+        corners = list(np.nonzero(is_c)[0])
+    elif not closed and n > 2 * m2 + 2:
+        t2, t1 = _turn(D, m2), _turn(D, m1)
+        valid = np.zeros(n, bool); valid[m2:n - m2] = True
+        is_c = valid & (t2 > corner_deg) & (t1 > 0.62 * t2)
+        if n > 2 * m4 + 2:
+            t4 = _turn(D, m4)
+            is_c &= (t4 > far * corner_deg) | ~np.isin(np.arange(n), np.arange(m4, n - m4))
+        for s in range(1, m2 + 1):
+            is_c &= (t2 >= np.roll(t2, s)) & (t2 > np.roll(t2, -s))
+        corners = list(np.nonzero(is_c)[0])
+
+    if closed and not corners:
         # a smooth loop: two halves joined smoothly
         h = n // 2
-        ta = _unit(use[1] - use[-1]); tb = _unit(use[h + 1] - use[h - 1])
-        A = np.vstack([use[:h + 1]]); B = np.vstack([use[h:], use[:1]])
+        ta = _unit(Ps[1] - Ps[-1]); tb = _unit(Ps[h + 1] - Ps[h - 1])
+        A = Ps[:h + 1]; B = np.vstack([Ps[h:], Ps[:1]])
         beziers = _fit(A, ta, -tb, err2) + _fit(B, tb, -ta, err2)
+        sub = [("M", (float(beziers[0][0][0]), float(beziers[0][0][1])))]
+        for b in beziers:
+            sub.append(("C", tuple(float(v) for v in (b[1][0], b[1][1], b[2][0], b[2][1], b[3][0], b[3][1]))))
+        return sub
+
+    # the sides between corners (and the two ends of an open run), without the rounded-off part
+    if closed:
+        nc = len(corners)
+        ext = np.vstack([Ps, Ps, Ps]); extD = np.vstack([D, D, D])
+        bounds = [(corners[i], corners[(i + 1) % nc] + (n if i + 1 >= nc else 0)) for i in range(nc)]
     else:
-        cs = corners + [corners[0] + n]
-        ext = np.vstack([use, use])
-        for i in range(len(corners)):
-            seg = ext[cs[i]:cs[i + 1] + 1]
-            if len(seg) < 2:
-                continue
-            if len(seg) <= 3:
-                beziers.append(np.array([seg[0], seg[0] + (seg[-1] - seg[0]) / 3, seg[-1] - (seg[-1] - seg[0]) / 3, seg[-1]]))
-                continue
-            beziers += _fit(seg, _end_tangent(seg), _end_tangent(seg[::-1]), err2)
-    sub = [("M", (float(beziers[0][0][0]), float(beziers[0][0][1])))]
-    for b in beziers:
-        sub.append(("C", tuple(float(v) for v in (b[1][0], b[1][1], b[2][0], b[2][1], b[3][0], b[3][1]))))
+        ext, extD = Ps, D
+        cs = [0] + corners + [n - 1]
+        bounds = [(cs[i], cs[i + 1]) for i in range(len(cs) - 1)]
+    lt = line_tol if line_tol is not None else max(0.3, 0.6 * err)
+    sides = []
+    last = len(bounds) - 1
+    for i, (a, b) in enumerate(bounds):
+        span = b - a
+        ta = end_trim if (not closed and i == 0) else corner_trim  # junctions smear more than corners
+        tb = end_trim if (not closed and i == last) else corner_trim
+        # a short side (the end of a thin stroke) is taken from the less smoothed run: smoothing
+        # pulls it in
+        src = extD if span < 2.5 * corner_trim * ppx else ext
+        Q = src[a + min(int(round(ta * ppx)), max(0, span // 4)):b - min(int(round(tb * ppx)), max(0, span // 4)) + 1]
+        if len(Q) < 2:
+            Q = ext[[a, b]]
+        k = max(2, min(len(Q), int(round(1.5 * ppx)) + 1))
+        d0, d1 = _direction(Q[:k]), _direction(Q[-k:])
+        # a side that one straight line follows all along (within line_tol) is that line, and its
+        # corners are where the whole lines meet, not where a pixel or two at each end points
+        c = Q.mean(0)
+        dl = _direction(Q) if len(Q) > 2 else _unit(Q[-1] - Q[0])
+        straight = len(Q) >= 2 and float(np.abs((Q[:, 0] - c[0]) * dl[1] - (Q[:, 1] - c[1]) * dl[0]).max()) < lt
+        if straight:
+            d0 = d1 = dl
+        sides.append((Q, d0, d1, straight, c))
+    # each corner where the side before it and the side after it meet; the end of a thin stroke
+    # (the outline turns right round between two nearly parallel sides) is cut square instead,
+    # as two corners on a cap line across the stroke, rather than drawn out to a far-off point
+    def corner(prev, nxt, raw):
+        Qp, _, dp, sp, cp = prev
+        Qn, dn, _, sn, cn = nxt
+        p_pt, n_pt = (cp if sp else Qp[-1]), (cn if sn else Qn[0])
+        if float(np.dot(dp, dn)) < -0.9:
+            perp = np.array([-dp[1], dp[0]])
+            c1 = _intersect(p_pt, dp, raw, perp); c2 = _intersect(n_pt, dn, raw, perp)
+            if (c1 is not None and c2 is not None and np.linalg.norm(c1 - raw) < reach
+                    and np.linalg.norm(c2 - raw) < reach and np.linalg.norm(c1 - c2) < 3.5):
+                return c1, c2
+            return raw, raw
+        x = _intersect(p_pt, dp, n_pt, dn)
+        if x is None or np.linalg.norm(x - raw) > reach:
+            x = raw
+        return x, x
+
+    if closed:
+        cps = [corner(sides[i - 1], sides[i], D[corners[i]]) for i in range(nc)]
+        ends = [(cps[i][1], cps[(i + 1) % nc][0]) for i in range(nc)]
+        caps = [cps[(i + 1) % nc] for i in range(nc)]
+    else:
+        cps = [(P[0], P[0])] + [corner(sides[i - 1], sides[i], D[cs[i]]) for i in range(1, len(sides))] + [(P[-1], P[-1])]
+        ends = [(cps[i][1], cps[i + 1][0]) for i in range(len(sides))]
+        caps = [cps[i + 1] for i in range(len(sides))]
+    sub = [("M", (float(ends[0][0][0]), float(ends[0][0][1])))]
+    for (A, B), (Q, d0, d1, straight, _), cap in zip(ends, sides, caps):
+        if straight:
+            sub.append(("L", (float(B[0]), float(B[1]))))
+        else:
+            pts_i = np.vstack([A[None], Q, B[None]])
+            chord = B - A
+            cl = np.linalg.norm(chord)
+            if cl > 1e-9:
+                dev = np.abs((pts_i[:, 0] - A[0]) * chord[1] - (pts_i[:, 1] - A[1]) * chord[0]) / cl
+            else:
+                dev = np.linalg.norm(pts_i - A, axis=1)
+            if dev.max() < lt:                                   # a straight side
+                sub.append(("L", (float(B[0]), float(B[1]))))
+            else:
+                for bz in _fit(pts_i, d0, -d1, err2):
+                    sub.append(("C", tuple(float(v) for v in (bz[1][0], bz[1][1], bz[2][0], bz[2][1], bz[3][0], bz[3][1]))))
+        if cap[0] is not cap[1] and np.linalg.norm(cap[1] - cap[0]) > 1e-6:   # across a square stroke end
+            sub.append(("L", (float(cap[1][0]), float(cap[1][1]))))
+    if closed and len(sub) > 1 and sub[-1][0] == "L" and np.linalg.norm(np.subtract(sub[-1][1], sub[0][1])) < 1e-6:
+        sub.pop()                                                # back at the start: Z closes it
     return sub
 
 
@@ -363,9 +509,19 @@ def _length(pts):
     return float(np.linalg.norm(p - np.roll(p, 1, 0), axis=1).sum())
 
 
-def _on_edge(lp, label, j):
+def is_blend(c, a, b, tol=40.0):
+    """True when colour c lies between colours a and b, as their anti-aliased mix does."""
+    c, a, b = (np.asarray(v, np.float64) for v in (c, a, b))
+    seg = a - b
+    t = float(np.dot(c - b, seg) / max(float(np.dot(seg, seg)), 1e-6))
+    return 0.05 < t < 0.95 and float(np.linalg.norm(b + t * seg - c)) < tol
+
+
+def _on_edge(lp, label, j, palette=None):
     """True when a small loop sits on the edge between two other colours (a speck left by
-    their anti-aliasing), not inside one colour like a dot or a hole: look just outside it."""
+    their anti-aliasing), not inside one colour like a dot or a hole: look just outside it.
+    With the palette, only when its colour is their mix: a small patch of a colour of its own
+    between two others (sky in the notch of a letter) is kept."""
     ring = np.asarray(Polygon(lp).buffer(1.5, quad_segs=2).exterior.coords)
     H, W = label.shape
     xs = np.clip(ring[:, 0].astype(int), 0, W - 1); ys = np.clip(ring[:, 1].astype(int), 0, H - 1)
@@ -373,8 +529,38 @@ def _on_edge(lp, label, j):
     others = around[around != j]
     if len(others) < 0.5 * len(around):
         return False
-    counts = np.sort(np.bincount(others))[::-1]
-    return len(counts) > 1 and counts[1] >= 0.2 * len(around)
+    cnt = np.bincount(others)
+    order = np.argsort(-cnt)
+    if len(order) < 2 or cnt[order[1]] < 0.2 * len(around):
+        return False
+    a, b = int(order[0]), int(order[1])
+    if palette is None or j >= len(palette) or a >= len(palette) or b >= len(palette):
+        return True
+    return is_blend(palette[j], palette[a], palette[b])
+
+
+def _up(a: np.ndarray, f: int) -> np.ndarray:
+    """A share map enlarged f times with a smooth (bicubic) interpolation."""
+    if f == 1:
+        return a
+    H, W = a.shape
+    return np.asarray(Image.fromarray(np.ascontiguousarray(a, np.float32), "F").resize((W * f, H * f), Image.BICUBIC))
+
+
+def _planar():
+    """planar.py (shared edges), or None where scipy cannot load (a Mac older than its build):
+    then each colour is traced on its own, as before."""
+    try:
+        import planar
+    except ImportError:
+        return None
+    return planar
+
+
+def supersample(H: int, W: int, n: int) -> int:
+    """How many times larger than the image the outlines are traced: dense sub-pixel points for
+    small images, about 4 million cells at most (but always at least twice the image size)."""
+    return int(max(2, min(8, math.floor(math.sqrt(4_000_000 / max(1, H * W))))))
 
 
 def trace_colors(S: np.ndarray, transparent: np.ndarray, skip: set, opts: dict):
@@ -388,16 +574,25 @@ def trace_colors(S: np.ndarray, transparent: np.ndarray, skip: set, opts: dict):
     n = len(S) - 1
     H, W = S.shape[1:]
     label = S.argmax(0)                                     # the strongest colour in every pixel
-    err = 0.25 + smooth / 100 * 0.7                         # how far a curve may stray, px
-    min_area = (1.5 + (100 - detail) / 100 * 5) ** 2        # specks smaller than this are dropped
+    # how smooth the outlines are: a small image keeps every pixel's worth of detail; a bigger
+    # one is drawn with smoother edges and straighter lines, as its wobbles of a pixel are noise
+    # (resizing, compression), not shape. The Smoothing slider (50 = this) scales it all
+    big = min(1.0, max(0.0, (max(H, W) - 128) / 400))
+    k = 0.5 + 0.5 * smooth / 50
+    err = float(opts["fit_tolerance"]) if opts.get("fit_tolerance") else (0.2 + 0.2 * big) * k   # px a curve may stray
+    edge_smooth = float(opts["edge_smooth"]) if opts.get("edge_smooth") else (0.6 + 0.8 * big) * k
+    line_tol = float(opts["line_tol"]) if opts.get("line_tol") else (0.3 + 0.3 * big) * k
+    # specks smaller than this are dropped; compression noise leaves more of them, so a noisy
+    # (JPEG) image drops larger ones while a clean image keeps small dots and letter parts
+    min_area = (1.5 + (100 - detail) / 100 * 2.5) ** 2 * (1 + 0.6 * float(opts.get("_noise", 0.0)))
 
     def keep(lp, j):
         a = abs(_area(lp))
         if a < min_area:                                    # a speck
             return False
-        if a / max(1e-6, _length(lp)) <= 0.45:              # a hairline sliver along another colour's edge
+        if a / max(1e-6, _length(lp)) <= float(opts.get("sliver", 0.45)):   # a hairline sliver along another colour's edge
             return False
-        return a >= 40 or not _on_edge(lp, label, j)        # a small speck between two other colours
+        return a >= 40 or not _on_edge(lp, label, j, opts.get("_palette"))   # a speck between two other colours
 
     def field(j):
         return S[j] - np.delete(S, j, axis=0).max(0)        # > 0 where j is the strongest colour
@@ -421,14 +616,55 @@ def trace_colors(S: np.ndarray, transparent: np.ndarray, skip: set, opts: dict):
         S[:n][gone] = 0
         label = S.argmax(0)
 
+    # the outlines are traced on the shares enlarged f times, so they follow the edges between
+    # pixels closely and small shapes get enough points to find their corners
+    # thin strokes: anti-aliasing spreads a stroke under a pixel wide over its neighbours, so its
+    # colour may never be the strongest anywhere. Undoing some of that blur (an unsharp mask on the
+    # shares) lifts it back above its surroundings; a plain edge's halfway line does not move
+    sharpen = float(opts.get("sharpen", 0.5))
+    if sharpen > 0:
+        sw = float(opts.get("sharpen_width", 0.7))
+        Sb = _blur(S, sw) if sw > 0.75 else _b121(_b121(S, -1), -2)
+        S = S + sharpen * (S - Sb)
+    # transparency wins only where a pixel is at least half transparent: in an opaque pixel whose
+    # colours were all cleared above (specks handed on), its sliver of share would punch a hole
+    S[n] = np.where(S[n] >= 0.5, S[n], S[n] - 1.0)
+    f = supersample(H, W, n + 1)
+    top1 = np.full((H * f, W * f), -np.inf, np.float32)
+    top2 = top1.copy()
+    lab = np.zeros(top1.shape, np.int16)
+    for j in range(n + 1):
+        u = _up(S[j], f)
+        better = u > top1
+        top2 = np.where(better, top1, np.maximum(top2, u))
+        top1 = np.where(better, u, top1)
+        lab[better] = j
+
+
+    planar = _planar() if opts.get("shared_edges", True) else None
+    if planar is not None:
+        # one fitted line for every boundary between two colours, shared by both shapes
+        if opts.get("clean_labels", True):
+            lab = planar.clean_labels(lab, min_area * f * f, set())
+        if opts.get("_palette") is not None and opts.get("drop_slivers", True):
+            lab = planar.drop_slivers(lab, f, opts["_palette"])
+        return planar.trace(lab, f, n, skip, err, corner, min_area, edge_smooth, line_tol,
+                            float(opts.get("jmove", 1.2)), float(opts.get("jtrim", 1.0)),
+                            reach=float(opts.get("reach", 4.0)), arm_px=float(opts.get("corner_arm", 2.0)),
+                            far=float(opts.get("corner_far", 0.0)), seams_out=opts.get("_seams"),
+                            small_lines=float(opts.get("small_lines", 1.6)))
+
     out = []
     for j in range(n):
         if j in skip:
             continue
-        F = field(j)
-        if (F > 0).sum() < min_area:
+        u = _up(S[j], f)
+        F = u - np.where(lab == j, top2, top1)
+        del u
+        if (F > 0).sum() < min_area * f * f:
             continue
-        loops = [lp for lp in contours(F) if keep(lp, j)]
+        loops = [[(x / f, y / f) for x, y in lp] for lp in contours(F)]
+        loops = [lp for lp in loops if keep(lp, j)]
         if not loops:
             continue
         polys = [Polygon(lp) for lp in loops]
@@ -445,10 +681,10 @@ def trace_colors(S: np.ndarray, transparent: np.ndarray, skip: set, opts: dict):
         fitted = {}
         for i in range(len(loops)):
             if depth[i] % 2 == 0:
-                subs = [fit_loop(loops[i], err, corner)]
+                subs = [fit_loop(loops[i], err, corner, f)]
                 for h in range(len(loops)):
                     if container[h] == i and depth[h] % 2 == 1:
-                        subs.append(fit_loop(loops[h], err, corner))
+                        subs.append(fit_loop(loops[h], err, corner, f))
                 fitted[i] = subs
         for i in sorted(fitted, key=lambda i: -areas[i]):
             out.append((j, fitted[i]))

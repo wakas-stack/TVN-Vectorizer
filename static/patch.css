@@ -1,4 +1,4 @@
-.pt { display: grid; grid-template-columns: 1fr 340px; height: calc(100% - 56px); }
+.pt { display: grid; grid-template-columns: 1fr 340px; height: calc(100% - 64px); }
 /* always a light checkerboard, so dark thread stays visible in dark mode too */
 .pt-stage { --check-a: #f4f4f2; --check-b: #e4e4e0;
   position: relative; overflow: hidden; display: grid; place-items: center; padding: 24px;
@@ -9,6 +9,10 @@
 .pt-stage.solid { background-image: none; }
 .pt-drop { width: min(560px, 100%); }
 #preview { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+/* the patch preview fits the stage both ways (the grid cell is the stage's own size, not the image's) */
+.pt-fit { grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+.pt-fit > #preview, .pt-fit > .pt-drop { grid-area: 1 / 1; }
+.pt-fit > #preview { width: auto; height: auto; max-width: 100%; max-height: 100%; }
 .pt-status { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); background: color-mix(in srgb, var(--panel) 80%, transparent); padding: 3px 8px; border-radius: 6px; }
 .pt-status:empty { display: none; }
 
@@ -41,13 +45,6 @@
 .slider { grid-template-columns: 92px 1fr 44px; }
 
 /* confirm before another logo replaces the current one */
-.pt-modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / .45); }
-.pt-modal[hidden] { display: none; }
-.pt-modal-box { width: min(420px, 100%); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: 0 16px 48px rgb(0 0 0 / .35); }
-.pt-modal-box h2 { margin: 0 0 8px; font-size: 17px; }
-.pt-modal-box p { margin: 0 0 18px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
-.pt-modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-.pt-modal-actions .danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
 
 @media (max-width: 860px) {
   .pt { grid-template-columns: 1fr; grid-template-rows: 60vh auto; height: auto; }

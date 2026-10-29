@@ -144,7 +144,7 @@ def to_pdf(svg: str) -> bytes:
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {wpt:.3f} {hpt:.3f}] /Contents 4 0 R /Resources << >> >>".encode(),
         f"<< /Length {len(stream)} /Filter /FlateDecode >>\nstream\n".encode() + stream + b"\nendstream",
-        b"<< /Producer (Vectorizer Local) >>",
+        b"<< /Producer (EMB Pros) >>",
     ]
     out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
     offsets = []
@@ -164,7 +164,7 @@ def to_eps(svg: str) -> bytes:
     vb, wpt, hpt, sx, sy = _page(root)
     ox, oy = (wpt - vb[2] * sx) / 2, (hpt - vb[3] * sy) / 2
     head = ["%!PS-Adobe-3.0 EPSF-3.0", f"%%BoundingBox: 0 0 {math.ceil(wpt)} {math.ceil(hpt)}",
-            f"%%HiResBoundingBox: 0 0 {wpt:.3f} {hpt:.3f}", "%%Creator: Vectorizer Local", "%%LanguageLevel: 3",
+            f"%%HiResBoundingBox: 0 0 {wpt:.3f} {hpt:.3f}", "%%Creator: EMB Pros", "%%LanguageLevel: 3",
             "%%Pages: 1", "%%EndComments", "%%Page: 1 1", "save",
             f"{ox - vb[0] * sx:.4f} {hpt - oy + vb[1] * sy:.4f} translate {sx:.6f} {-sy:.6f} scale"]
     tail = ["restore", "showpage", "%%EOF"]
@@ -172,9 +172,17 @@ def to_eps(svg: str) -> bytes:
 
 
 def to_png(svg: str, scale: float = 4.0) -> bytes:
-    """PNG via cairo, when it is installed (command line only; the app renders PNG in the page)."""
-    import cairosvg
-    return cairosvg.svg2png(bytestring=clean_svg(svg).encode(), scale=scale)
+    """PNG via cairo, when it is installed (the app renders PNG in the page); without cairo (a web
+    server that lacks it) the SVG as PDF, drawn by pypdfium2 at the same size."""
+    try:
+        import cairosvg
+        return cairosvg.svg2png(bytestring=clean_svg(svg).encode(), scale=scale)
+    except (ImportError, OSError):
+        import io
+        import gang_portable
+        im = gang_portable.raster(to_pdf(svg), 72 * scale / 0.75)      # a CSS px is 0.75 pt
+        buf = io.BytesIO(); im.save(buf, "PNG")
+        return buf.getvalue()
 
 
 def _rotate_from(el):

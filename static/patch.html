@@ -3,30 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Patch Mockup</title>
+<title>Patch Mockup · EMB Pros</title>
+<link rel="icon" href="/static/emb-pros-logo.svg">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/patch.css">
 </head>
 <body class="patch-page">
 <header class="top">
-  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
-  <nav class="nav">
-    <a href="/">Vectorizer</a>
-    <a href="/pantone">Pantone match</a>
-    <a href="/thread">Thread match</a>
-    <a href="/patch" aria-current="page">Patch mockup</a>
-  <a href="/gang">Gang sheet</a>
+  <a class="brand" href="/" title="EMB Pros"><img src="/static/emb-pros-logo.svg" alt="EMB Pros" width="214" height="47"></a>
+  <nav class="nav" aria-label="Tools">
+    <a href="/">Logo Vectorizer</a>
+    <a href="/pantone">Pantone Match</a>
+    <a href="/thread">Thread Match</a>
+    <a href="/patch" aria-current="page">Patch Mockup</a>
+    <a href="/gang">Gang Sheet Maker</a>
+    <a href="/cap">DST Maker</a>
   </nav>
-  <div class="file-info" id="fileInfo"></div>
-  <div class="top-actions">
-    <button class="ghost" id="newLogo">Choose logo</button>
-    <button class="ghost" id="savePdf" hidden disabled title="Layered vector PDF: shape, black logo, stitch lines">Download PDF</button>
-    <button class="primary" id="savePng" disabled>Download PNG</button>
-  </div>
 </header>
 
 <main class="pt">
-  <section class="pt-stage" id="stage">
+  <section class="pt-stage pt-fit" id="stage">
+    <div class="stage-bar" id="stageBar">
+      <div class="top-actions">
+        <button class="ghost" id="newLogo">Choose logo</button>
+        <button class="ghost" id="savePdf" hidden disabled title="Layered vector PDF: shape, black logo, stitch lines">Download PDF</button>
+        <button class="primary" id="savePng" disabled>Download PNG</button>
+      </div>
+      <div class="file-info" id="fileInfo"></div>
+    </div>
     <label class="drop pt-drop" id="drop">
       <input type="file" id="fileInput" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp,image/svg+xml,.svg" hidden>
       <div class="drop-icon">⬆</div>
@@ -47,6 +51,10 @@
         <button data-style="woven"><b>Woven</b><span>Fine flat thread, small detail</span></button>
         <button data-style="sublimated"><b>Dye-sublimated</b><span>Printed, full colour</span></button>
         <button data-style="leather"><b>Faux/Leather</b><span>Leatherette, pressed or engraved</span></button>
+        <button data-style="pvc"><b>PVC Rubber</b><span>Moulded soft rubber, raised layers</span></button>
+        <button data-style="silicone"><b>Silicone</b><span>Raised soft silicone, fine detail</span></button>
+        <button data-style="suede"><b>Suede</b><span>Soft matte nap, pressed or engraved</span></button>
+        <button data-style="htv"><b>HTV</b><span>Heat transfer vinyl, bold simple logos</span></button>
       </div>
     </details>
 
@@ -80,7 +88,7 @@
         <input type="color" id="outlineColor" value="#c8956a" title="Pick a colour">
       </div>
       <label class="slider" id="logoScaleRow">Logo size <input type="range" id="logoScale" min="50" max="150" step="5" value="100"><output>100%</output></label>
-      <div class="row" id="fabricRow" hidden><span class="lbl">Fabric</span>
+      <div class="row" id="fabricRow" hidden><span class="lbl" id="fabricLbl">Fabric</span>
         <label class="check"><input type="checkbox" id="fabricAuto" checked> Automatic</label>
         <input type="color" id="fabricColor" value="#efece4" disabled>
       </div>
@@ -91,20 +99,21 @@
       <label class="slider" id="seamWidthRow" hidden>Thickness <input type="range" id="seamWidth" min="0.4" max="2.4" step="0.1" value="1"><output>1.0×</output></label>
       <div class="row" id="borderColorRow"><span class="lbl">Colour</span>
         <label class="check"><input type="checkbox" id="borderAuto" checked> <span id="borderAutoText">Same as fabric</span></label>
-        <input type="color" id="borderColor" value="#efe3c8" title="Pick a colour">
+        <input type="color" id="borderColor" value="#000000" title="Pick a colour">
       </div>
       <label class="slider">Width <input type="range" id="borderWidth" min="1.5" max="7" step="0.5" value="3.5"><output>3.5%</output></label>
+      <label class="slider" id="borderThickRow">Thickness <input type="range" id="borderThick" min="0.3" max="2.5" step="0.1" value="1"><output>1.0×</output></label>
     </details>
 
     <details open>
       <summary>Look</summary>
       <div id="leatherBox" hidden>
-        <div class="row"><span class="lbl">Leatherette</span>
+        <div class="row" id="sheetRow"><span class="lbl">Leatherette</span>
           <span class="pt-sheet-chip" id="sheetChip"></span>
           <select id="leatherette"><option value="">Drawn leather (colour below)</option></select>
         </div>
         <p class="hint" id="sheetHint" hidden></p>
-        <div class="row" id="leatherColorRow"><span class="lbl">Leather</span>
+        <div class="row" id="leatherColorRow"><span class="lbl" id="leatherLbl">Leather</span>
           <div class="pt-leathers" id="leathers"></div>
           <input type="color" id="leatherColor" value="#a8693a" title="Custom leather colour">
         </div>
@@ -123,10 +132,9 @@
     <details open>
       <summary>Background &amp; export</summary>
       <div class="row"><span class="lbl">Background</span>
-        <select id="bgMode"><option value="transparent">Transparent</option><option value="#ffffff">White</option><option value="custom">Colour…</option></select>
+        <select id="bgMode"><option value="transparent">Transparent</option><option value="#ffffff" selected>White</option><option value="custom">Colour…</option></select>
         <input type="color" id="bgColor" value="#e9e5df" hidden>
       </div>
-      <label class="check"><input type="checkbox" id="shadow" checked> Drop shadow</label>
       <div class="row"><span class="lbl">PNG size</span>
         <select id="exportSize"><option value="1000">1000 px</option><option value="2000" selected>2000 px</option><option value="3000">3000 px</option></select>
       </div>
@@ -147,6 +155,7 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 <script src="/static/color.js"></script>
+<script src="/static/leave.js"></script>
 <script src="/static/patch.js"></script>
 </body>
 </html>

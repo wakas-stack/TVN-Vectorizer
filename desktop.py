@@ -20,7 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-LOG = Path.home() / "Library" / "Logs" / "Vectorizer Local.log"
+LOG = Path.home() / "Library" / "Logs" / "EMB Pros.log"
 LOG.parent.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(filename=LOG, level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logging.getLogger("werkzeug").setLevel(logging.WARNING)   # no per-request lines
@@ -79,6 +79,31 @@ class Api:
         logging.info("saved %s", dest)
         return dest
 
+    def save_bundle(self, files):
+        """Save several files the local server makes (files: [{name, path, body}]) into one folder
+        the user picks. Returns the folder, None if cancelled, or {"error": ...}."""
+        import urllib.error
+        import urllib.request
+        import webview
+        kind = getattr(getattr(webview, "FileDialog", None), "FOLDER", None) or webview.FOLDER_DIALOG
+        res = self.window.create_file_dialog(kind, directory=str(Path.home() / "Downloads"))
+        if not res:
+            return None
+        folder = Path(res if isinstance(res, str) else res[0])
+        for f in files:
+            req = urllib.request.Request(self.base_url + f["path"], data=json.dumps(f["body"]).encode(),
+                                         headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=900) as r:
+                    (folder / f["name"]).write_bytes(r.read())
+            except urllib.error.HTTPError as e:
+                try:
+                    return {"error": json.loads(e.read()).get("error", str(e))}
+                except Exception:
+                    return {"error": str(e)}
+        logging.info("saved %d files to %s", len(files), folder)
+        return str(folder)
+
     def open_window(self, title, path):
         import webview
         webview.create_window(title, self.base_url + path, js_api=self, width=1200, height=860, min_size=(420, 600))
@@ -105,7 +130,7 @@ def main():
             return
 
     api = Api(url.rstrip("/"))
-    win = webview.create_window("Vectorizer Local", url, js_api=api, width=1440, height=920, min_size=(900, 620))
+    win = webview.create_window("EMB Pros", url, js_api=api, width=1440, height=920, min_size=(900, 620))
     api.window = win
     result = {}
     if selftest:

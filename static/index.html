@@ -3,25 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vectorizer Local</title>
+<title>Logo Vectorizer · EMB Pros</title>
+<link rel="icon" href="/static/emb-pros-logo.svg">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="top">
-  <div class="brand"><span class="logo">◆</span> Vectorizer <b>Local</b></div>
-  <nav class="nav">
-    <a href="/" aria-current="page">Vectorizer</a>
-    <a href="/pantone">Pantone match</a>
-    <a href="/thread">Thread match</a>
-    <a href="/patch">Patch mockup</a>
-  <a href="/gang">Gang sheet</a>
+  <a class="brand" href="/" title="EMB Pros"><img src="/static/emb-pros-logo.svg" alt="EMB Pros" width="214" height="47"></a>
+  <nav class="nav" aria-label="Tools">
+    <a href="/" aria-current="page">Logo Vectorizer</a>
+    <a href="/pantone">Pantone Match</a>
+    <a href="/thread">Thread Match</a>
+    <a href="/patch">Patch Mockup</a>
+    <a href="/gang">Gang Sheet Maker</a>
+    <a href="/cap">DST Maker</a>
   </nav>
-  <div class="file-info" id="fileInfo"></div>
-  <div class="top-actions" id="topActions" hidden>
-    <button class="ghost" id="newBtn" title="Open another image">New image</button>
-    <button class="ghost" id="patchBtn" title="Show this logo as an embroidered, woven, printed or leather patch">Patch mockup ↗</button>
-    <button class="primary" id="downloadBtn">Download</button>
-  </div>
 </header>
 
 <!-- landing -->
@@ -57,6 +53,12 @@
         <span id="zoomLabel">100%</span>
         <button id="zoomIn" aria-label="Zoom in">+</button>
         <button id="zoomFit">Fit</button>
+      </div>
+      <div class="file-info" id="fileInfo"></div>
+      <div class="top-actions" id="topActions" hidden>
+        <button class="ghost" id="newBtn" title="Open another image">New image</button>
+        <button class="ghost" id="patchBtn" title="Show this logo as an embroidered, woven, printed or leather patch">Patch mockup ↗</button>
+        <button class="primary" id="downloadBtn">Download</button>
       </div>
     </div>
     <div class="viewport" id="viewport">
@@ -100,7 +102,7 @@
       </div>
       <label class="slider">Detail <input type="range" id="detail" min="0" max="100" value="50"><output>50</output></label>
       <label class="slider">Smoothing <input type="range" id="smoothing" min="0" max="100" value="50"><output>50</output></label>
-      <label class="slider">Corners <input type="range" id="corner" min="10" max="150" value="60"><output>60°</output></label>
+      <label class="slider">Corners <input type="range" id="corner" min="10" max="150" value="45"><output>45°</output></label>
       <label class="check"><input type="checkbox" id="fitShapes" checked> Fit whole shapes (circles, ellipses, rectangles)</label>
     </details>
 
@@ -210,6 +212,7 @@
 </dialog>
 
 <div class="toast" id="toast" hidden></div>
+<script src="/static/leave.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

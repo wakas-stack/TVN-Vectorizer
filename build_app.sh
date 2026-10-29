@@ -1,8 +1,8 @@
 #!/bin/zsh
-# Build "dist/Vectorizer Local.app": a self-contained Mac app (Apple Silicon + Intel)
+# Build "dist/EMB Pros.app": a self-contained Mac app (Apple Silicon + Intel)
 # with its own Python, so it runs on another Mac without installing anything.
 #
-#   ./build_app.sh   builds dist/Vectorizer Local (Mac)/ (app + read-me) and dist/Vectorizer-Local-Mac.zip
+#   ./build_app.sh   builds dist/EMB Pros (Mac)/ (app + read-me) and dist/EMB-Pros-Mac.zip
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -10,8 +10,8 @@ PBS_TAG=20261021
 PY_VER=3.12.15
 BUILD="$HERE/build"
 CACHE="$BUILD/cache"
-PKG="$HERE/dist/Vectorizer Local (Mac)"            # what you copy to another Mac
-APP="$PKG/Vectorizer Local.app"
+PKG="$HERE/dist/EMB Pros (Mac)"            # what you copy to another Mac
+APP="$PKG/EMB Pros.app"
 NATIVE_PY="$HERE/.venv/bin/python"          # only used to run pip during the build
 mkdir -p "$CACHE"
 
@@ -23,6 +23,11 @@ SUMS="$CACHE/SHA256SUMS-$PBS_TAG"
 
 typeset -A PBS_ARCH=(arm64 aarch64 x86_64 x86_64)
 typeset -A WHEEL_PLAT=(arm64 macosx_11_0_arm64 x86_64 macosx_10_13_x86_64)
+# scipy (the tracer's planar map) and onnxruntime (the AI upscaler) only build for newer macOS: they
+# come with those builds, the rest keep the older ones; on an older Mac they do not load, and the
+# tracer goes on without them (each colour traced on its own, no AI upscale)
+typeset -A NEWER_PLAT=(arm64 macosx_12_0_arm64 x86_64 macosx_11_0_x86_64)
+NEWER="scipy|onnxruntime"
 
 rm -rf "$BUILD/rt" && mkdir -p "$BUILD/rt"
 for A in arm64 x86_64; do
@@ -40,15 +45,22 @@ for A in arm64 x86_64; do
   WH="$CACHE/wheels-$A"
   mkdir -p "$WH"
   say "Collecting libraries for $A"
-  grep -v proxy_tools "$HERE/requirements-app.txt" > "$BUILD/req-binary.txt"
+  grep -Ev "^($NEWER)==" "$HERE/requirements-app.txt" > "$BUILD/req-app.txt"
+  grep -Ev "^($NEWER)==" "$HERE/requirements-app.txt" | grep -v proxy_tools > "$BUILD/req-binary.txt"
+  grep -E "^($NEWER)==" "$HERE/requirements-app.txt" > "$BUILD/req-newer.txt"
   "$NATIVE_PY" -m pip download -q -r "$BUILD/req-binary.txt" --no-deps -d "$WH" \
       --platform "${WHEEL_PLAT[$A]}" --python-version 3.12 --implementation cp --abi cp312 --only-binary=:all:
+  "$NATIVE_PY" -m pip download -q -r "$BUILD/req-newer.txt" --no-deps -d "$WH" \
+      --platform "${NEWER_PLAT[$A]}" --python-version 3.12 --implementation cp --abi cp312 --only-binary=:all:
   # proxy_tools (pure Python) only ships as source, so build its wheel once
   [[ -n "$(print -l "$WH"/proxy_tools-*.whl(N))" ]] || "$NATIVE_PY" -m pip wheel -q --no-deps "proxy_tools==0.1.0" -w "$WH"
   SITE="$BUILD/rt/$A/python/lib/python3.12/site-packages"
   "$NATIVE_PY" -m pip install -q --no-index --find-links "$WH" --no-deps --target "$SITE" \
       --platform "${WHEEL_PLAT[$A]}" --python-version 3.12 --implementation cp --abi cp312 --only-binary=:all: \
-      -r "$HERE/requirements-app.txt" --upgrade
+      -r "$BUILD/req-app.txt" --upgrade
+  "$NATIVE_PY" -m pip install -q --no-index --find-links "$WH" --no-deps --target "$SITE" \
+      --platform "${NEWER_PLAT[$A]}" --python-version 3.12 --implementation cp --abi cp312 --only-binary=:all: \
+      -r "$BUILD/req-newer.txt" --upgrade
 
   # ------------------------------------------------------------ slim down
   L="$BUILD/rt/$A/python/lib"
@@ -79,12 +91,13 @@ for A in arm64 x86_64; do
   # the interpreter lives in Contents/MacOS so macOS treats the window as this app (name, icon, Dock)
   cp "$APP/Contents/Resources/runtime-$A/bin/python3.12" "$APP/Contents/MacOS/python-$A"
 done
-cp "$HERE"/{app.py,engine.py,precise.py,export.py,patch.py,gang.py,desktop.py,selftest.py} "$APP/Contents/Resources/app/"
+cp "$HERE"/{app.py,engine.py,precise.py,planar.py,upscale.py,export.py,patch.py,gang.py,gang_portable.py,digitize.py,worksheet.py,desktop.py,selftest.py} "$APP/Contents/Resources/app/"
+rsync -a --exclude ".DS_Store" "$HERE/models" "$APP/Contents/Resources/app/"
 rsync -a --exclude ".DS_Store" "$HERE/static" "$APP/Contents/Resources/app/"
 "$NATIVE_PY" -m compileall -q "$APP/Contents/Resources/app" >/dev/null
 cp "$BUILD/AppIcon.icns" "$APP/Contents/Resources/"
 
-cat > "$APP/Contents/MacOS/Vectorizer Local" <<'LAUNCH'
+cat > "$APP/Contents/MacOS/EMB Pros" <<'LAUNCH'
 #!/bin/bash
 # Picks the Python built for this Mac (Apple Silicon or Intel) and starts the app.
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -95,17 +108,17 @@ export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 unset PYTHONPATH PYTHONSTARTUP
 exec "$DIR/python-$A" -s "$RES/app/desktop.py" "$@"
 LAUNCH
-chmod +x "$APP/Contents/MacOS/Vectorizer Local"
+chmod +x "$APP/Contents/MacOS/EMB Pros"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Vectorizer Local</string>
-  <key>CFBundleDisplayName</key><string>Vectorizer Local</string>
+  <key>CFBundleName</key><string>EMB Pros</string>
+  <key>CFBundleDisplayName</key><string>EMB Pros</string>
   <key>CFBundleIdentifier</key><string>local.vectorizer.desktop</string>
-  <key>CFBundleExecutable</key><string>Vectorizer Local</string>
+  <key>CFBundleExecutable</key><string>EMB Pros</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
@@ -121,6 +134,6 @@ PLIST
 codesign --force --deep --sign - "$APP" 2>/dev/null || echo "(ad-hoc signing skipped)"
 
 say "Zipping"
-( cd "$HERE/dist" && ditto -c -k --sequesterRsrc --keepParent "Vectorizer Local (Mac)" "Vectorizer-Local-Mac.zip" )
-du -sh "$APP" "$HERE/dist/Vectorizer-Local-Mac.zip"
+( cd "$HERE/dist" && ditto -c -k --sequesterRsrc --keepParent "EMB Pros (Mac)" "EMB-Pros-Mac.zip" )
+du -sh "$APP" "$HERE/dist/EMB-Pros-Mac.zip"
 say "Done"

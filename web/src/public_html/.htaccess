@@ -1,0 +1,27 @@
+# EMB Pros: the same addresses as the app (/, /pantone, /thread, /patch, /gang, /cap), and
+# /api/... passed to api.php (and on to the engine).
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  # the site's own PHP parts are not pages
+  RewriteRule ^(includes/|config\.php) - [F,L]
+  RewriteRule ^api/(.+)$ api.php?__path=$1 [QSA,L]
+  RewriteRule ^(pantone|thread|patch|gang|cap)/?$ $1.php [QSA,L]
+</IfModule>
+
+# large logos and sheets (Apache with mod_php; other servers read .user.ini)
+<IfModule mod_php.c>
+  php_value upload_max_filesize 48M
+  php_value post_max_size 48M
+  php_value max_execution_time 300
+  php_value memory_limit 256M
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css|svg|json|jpg|png)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+</IfModule>

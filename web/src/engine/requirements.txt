@@ -1,0 +1,21 @@
+# EMB Pros engine: Python 3.12 or 3.13, on Linux x86_64. These versions all have ready-made builds
+# for older hosting too (glibc 2.17: CloudLinux / CentOS 7 based cPanel servers), checked on PyPI
+# on 29 Oct 2026: nothing is compiled on the server. (Newer numpy, Pillow, shapely and pikepdf
+# need glibc 2.28 or newer.)
+Flask==3.1.3
+numpy==2.2.6
+pillow==12.2.0
+shapely==2.1.2
+vtracer==0.6.15
+ezdxf==1.4.5
+pyparsing==3.3.3
+fonttools==4.67.0
+# the precise tracer's planar map (planar.py): 1.15.3 has a glibc 2.17 build and works with numpy 2.2
+scipy==1.15.3
+# PDF on a server (the Mac app uses macOS Quartz instead): reading, drawing and writing PDFs
+pikepdf==9.8.1
+pypdfium2==5.14.0
+# a production web server for a VPS (cPanel uses Passenger instead)
+gunicorn
+# optional: cairosvg (needs the Cairo library) for the Logo Vectorizer PNG; without it the PNG
+# is drawn with pypdfium2 at the same size

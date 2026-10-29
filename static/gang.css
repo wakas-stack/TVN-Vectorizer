@@ -1,14 +1,33 @@
 /* Gang sheet page (uses the Patch mockup layout) */
-.gs-logo { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: center; margin: 4px 0 6px; }
-.gs-logo img { width: 64px; height: 64px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
-.gs-logo b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gs-logo small { color: var(--muted); font-size: 12px; }
+.gs-logos { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; }
+.gs-card { position: relative; display: grid; grid-template-columns: 48px 1fr; gap: 4px 10px; align-items: center;
+  padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.gs-card img { width: 48px; height: 48px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.gs-card-name { min-width: 0; padding-right: 22px; }
+.gs-card-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.gs-card-name small { color: var(--muted); font-size: 11.5px; }
+.gs-card .row { grid-column: 1 / -1; margin: 0; flex-wrap: nowrap; }
+.gs-card .gs-dims input { width: 66px; }
+.gs-card .gs-dims .check { margin: 0 0 0 6px; color: var(--ink); white-space: nowrap; }
+.gs-card .lq:disabled { opacity: .6; }
+.gs-x { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  font: 600 14px/20px -apple-system, sans-serif; color: var(--muted); background: none; border: 1px solid transparent; }
+.gs-x:hover { color: var(--danger); border-color: var(--danger); }
+.gs-warn { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.gs-warn.bad { color: var(--danger); }
 .gs-dims { gap: 8px; }
 .gs-dims label { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
 .gs-dims input { width: 72px; }
 .unit-label { color: var(--muted); font-size: 13px; }
 .gs-count { margin: 8px 0 2px; font-weight: 600; }
-#preview { box-shadow: 0 2px 12px rgb(0 0 0 / .18); background: #fff; }
+/* the canvas light grey; the sheet white (or the colour picked) with a thin dark grey outline, also
+   before any logo is on it */
+.gs-stage { --sheet: #ffffff; background-color: #e9eaed; background-image: none; }
+#preview { background: var(--sheet); outline: 1px solid #55595f; }
+.gs-sheet { position: absolute; background: var(--sheet); outline: 1px solid #55595f; pointer-events: none; }
+.gs-sheet[hidden] { display: none; }
+.gs-stage > .pt-drop { position: relative; z-index: 1; }
+#sheetColor { width: 34px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
 
 /* clickable places over the preview */
 .gs-overlay { position: absolute; pointer-events: none; }
@@ -24,3 +43,21 @@
   font: 600 13px/18px -apple-system, sans-serif; color: var(--muted); background: var(--panel); border: 1px solid var(--line); opacity: .7; }
 .gs-row:hover { opacity: 1; color: var(--danger); border-color: var(--danger); }
 .gs-row.restore:hover { color: var(--sel); border-color: var(--sel); }
+
+/* the box that puts logos into empty places */
+.gs-pop { position: absolute; z-index: 30; width: 300px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgb(0 0 0 / .28); }
+.gs-pop[hidden] { display: none; }
+.gs-pop .row { margin: 0; }
+.gs-pop-logos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.gs-pop-logos button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; padding: 6px 4px;
+  border: 1.5px solid var(--line); border-radius: 8px; background: none; color: var(--ink); font-size: 11px; }
+.gs-pop-logos button img { width: 100%; height: 40px; object-fit: contain; background: #fff; border-radius: 4px; }
+.gs-pop-logos button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-pop-logos button.new b { display: grid; place-items: center; height: 40px; font-size: 22px; color: var(--sel); }
+.gs-pop-logos button:hover { border-color: var(--sel); }
+.gs-pop-logos button[aria-checked="true"] { border-color: var(--sel); background: rgb(47 107 255 / .08); }
+.gs-pop-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.gs-pop-act { display: flex; justify-content: flex-end; gap: 8px; }
+.gs-pop .gs-dims input { width: 66px; }
+.gs-dims input[type="checkbox"] { width: auto; }

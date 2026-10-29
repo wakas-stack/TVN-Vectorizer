@@ -10,19 +10,32 @@ const ROLE_LABELS = {
   woven: { base: "Background", thread: "Woven detail", hidden: "Hidden" },
   sublimated: { base: "Background", thread: "Printed", hidden: "Hidden" },
   leather: { base: "Leather", thread: "Logo", hidden: "Hidden" },
+  pvc: { base: "Base (PVC)", thread: "Raised layer", hidden: "Hidden" },
+  silicone: { base: "Base layer", thread: "Raised silicone", hidden: "Hidden" },
+  suede: { base: "Suede", thread: "Logo", hidden: "Hidden" },
+  htv: { base: "Bottom vinyl", thread: "Vinyl", hidden: "Hidden" },
 };
+const ONE_PIECE = ["leather", "suede"];        // the logo pressed or engraved into the material, as one piece
+const RAISED = ["pvc", "silicone"];             // every logo colour a raised layer on a base plate of its own colour
+const ALL_LOGO = [...ONE_PIECE, ...RAISED];     // types that make every logo colour part of the logo
+const TEXTILE = ["embroidery", "woven", "sublimated"];
 const BORDERS = {
   textile: [["merrow", "Merrow (rolled edge)"], ["satin", "Satin stitch"], ["laser", "Laser-cut / heat-sealed"], ["none", "None"]],
   leather: [["seam", "Stitched seam"], ["none", "None"]],
+  moulded: [["rim", "Raised rim"], ["none", "None"]],
+  none: [["none", "None"]],
 };
+const bordersFor = (style) => (TEXTILE.includes(style) ? BORDERS.textile : ONE_PIECE.includes(style) ? BORDERS.leather
+  : style === "htv" ? BORDERS.none : BORDERS.moulded);
 
 const S = {
   file: null, name: "patch", token: null, info: null,
   opts: { style: "embroidery", roles: {}, recolor: {}, shape: "outline", border: "merrow", border_color: null, border_width: 0.035,
           relief: 0.7, density: 1, angle: 45, light: 135, gloss: 0.5, full_embroidery: false,
-          leather_color: "#a8693a", leather_finish: "deboss", background: "transparent", shadow: true },
+          leather_color: "#a8693a", leather_finish: "deboss", background: "#ffffff", shadow: false },   // mockups have no drop shadow
   req: 0, url: null,
 };
+window.embHasWork = () => !!S.token;             // leave.js: a logo is open
 
 function toast(msg, isError = false, ms = 3800) {
   const t = $("#toast"); t.textContent = msg; t.className = "toast" + (isError ? " error" : ""); t.hidden = false;
@@ -194,7 +207,8 @@ async function render() {
 }
 let rt;
 const renderSoon = () => { clearTimeout(rt); rt = setTimeout(render, 140); };
-const labelOf = (s) => ({ embroidery: "Embroidered", woven: "Woven", sublimated: "Dye-sublimated", leather: "Faux/Leather" })[s];
+const labelOf = (s) => ({ embroidery: "Embroidered", woven: "Woven", sublimated: "Dye-sublimated", leather: "Faux/Leather",
+  pvc: "PVC Rubber", silicone: "Silicone", suede: "Suede", htv: "HTV" })[s];
 
 // ---------------------------------------------------------------- controls
 function renderColors() {
@@ -228,6 +242,10 @@ function renderColors() {
     woven: "Every colour is woven into one flat fabric; detail colours sit very slightly higher.",
     sublimated: "Every colour is printed onto smooth fabric.",
     leather: "The logo colours are pressed, raised or engraved into the leather; the leather colour is set under Look.",
+    pvc: "Each logo colour is a raised layer of moulded PVC on the base colour; Relief sets how high the layers stand.",
+    silicone: "Each logo colour is raised soft silicone, usually pressed straight onto the garment (Logo only).",
+    suede: "The logo colours are pressed, raised or engraved into the suede; the suede colour is set under Look.",
+    htv: "Each colour is cut from flat vinyl and heat-pressed on. HTV suits bold letters and simple logos: lines thinner than about 1 mm and tiny gaps are hard to cut and weed, so keep the detail bold.",
   }[S.opts.style];
 }
 
@@ -253,10 +271,11 @@ function threadRow(c, shown) {
   return div;
 }
 
-// Faux/Leather shows the logo as one piece, engraved or pressed: every logo colour becomes "Logo"
-// (the roles chosen for the other patch types come back when you leave it)
+// Faux/Leather and Suede show the logo as one piece, engraved or pressed, and PVC and Silicone raise
+// every logo colour on a base of its own colour: every logo colour becomes "Logo" / a raised layer
+// (the roles chosen for the other patch types come back when you leave them)
 function leatherRoles() {
-  if (S.opts.style !== "leather" || !S.info) return;
+  if (!ALL_LOGO.includes(S.opts.style) || !S.info) return;
   // the background's colour inside letters (the holes of B, O, D) stays open
   const bg = new Set(S.info.colors.filter((c) => c.kind === "background").map((c) => c.hex.toLowerCase()));
   for (const c of S.info.colors) if (c.kind === "colour") S.opts.roles[c.id] = bg.has(c.hex.toLowerCase()) ? "hidden" : "thread";
@@ -265,32 +284,41 @@ function leatherRoles() {
 function setStyle(style) {
   const was = S.opts.style;
   S.opts.style = style;
-  if (style === "leather" && was !== "leather") { S.savedRoles = { ...S.opts.roles }; leatherRoles(); }
-  else if (style !== "leather" && was === "leather" && S.savedRoles) { S.opts.roles = S.savedRoles; S.savedRoles = null; }
+  const onePiece = ONE_PIECE.includes(style);
+  if (ALL_LOGO.includes(style) && !ALL_LOGO.includes(was)) { S.savedRoles = { ...S.opts.roles }; leatherRoles(); }
+  else if (ALL_LOGO.includes(style)) leatherRoles();
+  else if (ALL_LOGO.includes(was) && S.savedRoles) { S.opts.roles = S.savedRoles; S.savedRoles = null; }
   $$("#styles button").forEach((b) => b.classList.toggle("on", b.dataset.style === style));
   const leather = style === "leather";
-  const list = leather ? BORDERS.leather : BORDERS.textile;
-  const keep = list.some(([v]) => v === S.opts.border);
+  const list = bordersFor(style);
+  // the border kept between types with the same borders; another kind of patch starts with its first
+  const keep = bordersFor(was) === list && list.some(([v]) => v === S.opts.border);
   if (!keep) S.opts.border = list[0][0];
   $("#border").innerHTML = list.map(([v, t]) => `<option value="${v}" ${v === S.opts.border ? "selected" : ""}>${t}</option>`).join("");
-  $("#leatherBox").hidden = !leather;
+  $("#leatherBox").hidden = !onePiece;      // suede: the same colour and finish, no leatherette sheets
+  $("#sheetRow").hidden = !leather;
+  $("#leatherLbl").textContent = leather ? "Leather" : "Suede";
+  if (leather) { const id = $("#leatherette").value; $("#leatherColorRow").hidden = !!id; $("#sheetHint").hidden = !id; }
+  else { $("#leatherColorRow").hidden = false; $("#sheetHint").hidden = true; }
   $("#savePdf").hidden = !leather;          // the production PDF is for leather patches
   if (leather && !SHEETS.picked && SHEETS.list.length) { SHEETS.picked = true; setSheet(SHEETS.list.find((s) => s.texture)?.id); }
   $("#angleRow").hidden = style !== "embroidery";
   $("#fullRow").hidden = style !== "embroidery";
-  $("#densityRow").hidden = leather;
+  $("#densityRow").hidden = !TEXTILE.includes(style);     // thread density: woven and printed fabric too
   $("#threadChartRow").hidden = style !== "embroidery";
-  $("#borderAutoText").textContent = leather ? "Cream thread" : "Same as fabric";
-  if ($("#borderAuto").checked) $("#borderColor").value = leather ? "#efe3c8" : "#000000";
+  $("#borderAutoText").textContent = onePiece ? "Black thread" : "Same as fabric";
+  if ($("#borderAuto").checked) $("#borderColor").value = "#000000";
   // leather patches are usually rounded rectangles; only while you have not picked a shape yourself
   if (!setStyle.touchedShape) { S.opts.shape = defaultShape(); $("#shape").value = S.opts.shape; }
   updateBorderRow();
   renderColors();
 }
-// a one-colour logo is shown as the logo only; leather patches are usually rounded rectangles
+// a one-colour logo is shown as the logo only; leather and suede patches are usually rounded
+// rectangles; silicone and HTV are pressed straight onto the garment: the logo only
 function defaultShape() {
   if (S.info?.suggested_shape === "logo") return "logo";
-  return S.opts.style === "leather" ? "rounded" : "outline";
+  if (["silicone", "htv"].includes(S.opts.style)) return "logo";
+  return ONE_PIECE.includes(S.opts.style) ? "rounded" : "outline";
 }
 function updateBorderRow() {
   const logoOnly = S.opts.shape === "logo";
@@ -301,15 +329,17 @@ function updateBorderRow() {
   const filled = logoOnly && S.opts.outline === "filled";
   $("#outlineRow").hidden = !logoOnly;
   $("#outlineWidthRow").hidden = !filled;
-  $("#outlineColorRow").hidden = !filled || S.opts.style === "leather";
+  $("#outlineColorRow").hidden = !filled || ONE_PIECE.includes(S.opts.style);
   $("#borderColorRow").hidden = none || S.opts.border === "laser";
-  const seam = S.opts.style === "leather" && !none;      // leather seam: stitch style and thickness
+  const seam = ONE_PIECE.includes(S.opts.style) && !none;      // leather and suede seam: stitch style and thickness
   $("#seamRow").hidden = !seam;
   $("#seamWidthRow").hidden = !seam;
   $("#borderWidth").closest("label").hidden = none || S.opts.border === "laser";
-  // fabric colour only matters when the patch has a backing and no logo colour is the fabric
-  const hasBase = S.info && S.info.colors.some((c) => (S.opts.roles[c.id] || S.info.roles[c.id]) === "base");
-  $("#fabricRow").hidden = logoOnly || !S.info || hasBase;
+  $("#borderThickRow").hidden = none || seam;     // a seam has its own thickness (the thread's)
+  // the backing's colour: always yours to pick (over a logo colour that is the fabric too); leather
+  // and suede take theirs from Look
+  $("#fabricRow").hidden = logoOnly || !S.info || ONE_PIECE.includes(S.opts.style);
+  $("#fabricLbl").textContent = TEXTILE.includes(S.opts.style) ? "Fabric" : "Base colour";
 }
 function applyDefaultShape() {
   setStyle.touchedShape = false;
@@ -343,6 +373,7 @@ $("#outline").addEventListener("change", (e) => { S.opts.outline = e.target.valu
 $("#outlineAuto").addEventListener("change", (e) => { S.opts.outline_color = e.target.checked ? null : $("#outlineColor").value; render(); });
 $("#outlineColor").addEventListener("input", (e) => { $("#outlineAuto").checked = false; S.opts.outline_color = e.target.value; renderSoon(); });
 bindSlider("seamWidth", "seam_width", (v) => v.toFixed(1) + "×", 0.006);
+bindSlider("borderThick", "border_thickness", (v) => v.toFixed(1) + "×", 1);
 bindSlider("relief", "relief", (v) => Math.round(v * 100) + "%");
 bindSlider("density", "density", (v) => v.toFixed(1) + "×");
 bindSlider("angle", "angle", (v) => v + "°");
@@ -350,15 +381,21 @@ bindSlider("light", "light", (v) => v + "°");
 bindSlider("gloss", "gloss", (v) => Math.round(v * 100) + "%");
 $("#fullEmb").addEventListener("change", (e) => { S.opts.full_embroidery = e.target.checked; renderColors(); render(); });
 $("#finish").addEventListener("change", (e) => { S.opts.leather_finish = e.target.value; render(); });
-$("#shadow").addEventListener("change", (e) => { S.opts.shadow = e.target.checked; render(); });
 $("#bgMode").addEventListener("change", (e) => {
   const v = e.target.value;
   $("#bgColor").hidden = v !== "custom";
   S.opts.background = v === "custom" ? $("#bgColor").value : v;
-  $("#stage").classList.toggle("solid", v !== "transparent");
+  stageBackground();
   render();
 });
-$("#bgColor").addEventListener("change", (e) => { S.opts.background = e.target.value; render(); });
+$("#bgColor").addEventListener("change", (e) => { S.opts.background = e.target.value; stageBackground(); render(); });
+// the whole canvas shows the chosen background (white by default); the checkerboard only for transparent
+function stageBackground() {
+  const solid = S.opts.background !== "transparent";
+  $("#stage").classList.toggle("solid", solid);
+  $("#stage").style.backgroundColor = solid ? S.opts.background : "";
+}
+stageBackground();
 
 // ---------------------------------------------------------------- leatherette sheets
 // Heritage Collection leatherette (static/leatherette/catalog.json, made by make_leatherette.py):
