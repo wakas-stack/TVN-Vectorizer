@@ -29,6 +29,28 @@ select, input[type=number] { background: var(--panel); border: 1px solid var(--l
 .nav a[aria-current=page] { background: var(--accent); color: var(--accent-ink); }
 .nav a[aria-current=page]::after { content: ""; position: absolute; left: 50%; bottom: 9px; margin-left: -5px;
   border: 5px solid transparent; border-top-color: currentColor; border-bottom: 0; }
+/* on a phone the tabs fold into a menu button (a checkbox and its label: no script needed); the list
+   drops down under the header, the open tool in orange */
+.nav-toggle { display: none; }
+@media (max-width: 860px) {
+  .top { position: relative; gap: 12px; padding: 0 4px 0 16px; }
+  .brand img { height: 40px; }
+  .nav-toggle { display: grid; place-items: center; width: 56px; margin-left: auto; cursor: pointer; color: var(--ink); }
+  .nav-toggle span, .nav-toggle span::before, .nav-toggle span::after { display: block; width: 24px; height: 2px;
+    border-radius: 1px; background: currentColor; transition: transform .2s, background .2s; }
+  .nav-toggle span { position: relative; }
+  .nav-toggle span::before, .nav-toggle span::after { content: ""; position: absolute; left: 0; }
+  .nav-toggle span::before { top: -7px; }
+  .nav-toggle span::after { top: 7px; }
+  .nav-check:checked ~ .nav-toggle span { background: transparent; }
+  .nav-check:checked ~ .nav-toggle span::before { transform: translateY(7px) rotate(45deg); }
+  .nav-check:checked ~ .nav-toggle span::after { transform: translateY(-7px) rotate(-45deg); }
+  .nav { display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 40; margin: 0; flex-direction: column;
+    background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 10px 24px rgb(0 0 0 / .12); overflow: visible; }
+  .nav-check:checked ~ .nav { display: flex; }
+  .nav a { padding: 15px 20px; font-size: 14px; border-top: 1px solid var(--line); }
+  .nav a[aria-current=page]::after { display: none; }
+}
 .file-info { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 /* a page's buttons: a row at the top of its work area */

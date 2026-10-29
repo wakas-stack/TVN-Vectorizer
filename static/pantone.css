@@ -71,6 +71,4 @@
   .pm-card .actions { flex-wrap: wrap; }
   .pm-yours { position: static; display: grid; grid-template-columns: 96px 1fr; }
   .pm-yours .chip { height: auto; min-height: 84px; }
-  .nav { margin-left: 0; }
-  .top .brand { display: none; }
 }

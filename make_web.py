@@ -34,6 +34,11 @@ def page_php(name: str) -> str:
     html = html.replace(m.group(0), f"<?php emb_header('{PAGES[name]}'); ?>")
     for mac, web in WEB_WORDS:      # what is true of the Mac app, said as it is on the website
         html = html.replace(mac, web)
+    # scripts and stylesheets with their version (layout.php's emb_v), so an update shows at once
+    html, n = re.subn(r'(href|src)="(/static/[^"?#]+\.(?:css|js))"',
+                      lambda m: f"{m[1]}=\"<?= emb_v('{m[2]}') ?>\"", html)
+    if not n:
+        raise SystemExit(f"{name}.html: no scripts or stylesheets found")
     return "<?php require __DIR__ . '/includes/layout.php'; ?>\n" + html
 
 
