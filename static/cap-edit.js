@@ -347,7 +347,8 @@ function transform(v, f, a, at, undoTaken) {
     if (!C.sels.includes("draft:" + sh.id) || sh.sewn) return sh;
     const view = sh.view.map(map), rings = sh.rings?.map((r) => r.map(map));
     const out = { ...sh, view, px: view.map(toPxFrame), width_mm: sh.width_mm * fw, width: sh.width_mm * fw / C.lock,
-                  ...(rings ? { rings, pxRings: rings.map((r) => r.map(toPxFrame)) } : {}) };
+                  ...(rings ? { rings, pxRings: rings.map((r) => r.map(toPxFrame)) } : {}),
+                  ...(sh.text ? { text: { ...sh.text, height_mm: Math.round(sh.text.height_mm * fy * 10) / 10 } } : {}) };
     if (sh.corner) setCorners(out, sh.corner.base.map(fromPxFrame).map(map).map(toPxFrame), sh.corner.r.map((x) => x * fw), sh.corner.style);
     return out;
   });
@@ -842,6 +843,7 @@ function updateTools() {
   $("#toolSelect").setAttribute("aria-pressed", C.tool === "select");
   $("#toolShapes").setAttribute("aria-pressed", C.tool.startsWith("shape:"));
   $("#toolPen").setAttribute("aria-pressed", C.tool === "pen");
+  $("#toolText").setAttribute("aria-pressed", !$("#textMenu").hidden);
   $("#toolHand").setAttribute("aria-pressed", C.tool === "hand");
   $("#toolAlign").setAttribute("aria-pressed", !$("#alignMenu").hidden);
   $("#toolCorners").disabled = isDst();
@@ -949,15 +951,15 @@ function simplifyPath(pts, tol) {               // fewer points, the line kept w
   keep.push(pts[pts.length - 1]);
   return keep;
 }
-async function addShape(d) {
-  const path = d.path;
+async function addShape(d) {     // d: {path, closed, width_mm}, or text: {rings (0.1 mm, even-odd), text}
+  const path = d.rings ? d.rings.flat() : d.path;
   const [x0, y0, x1, y1] = bbox([path]);
   if (path.length < 2 || Math.max(x1 - x0, y1 - y0) < 15) { toast("Draw it larger: at least 1.5 mm."); repaint(); return; }
-  const t = drawThread(), closed = d.closed && path.length >= 3;
+  const t = drawThread(), closed = !!d.rings || (d.closed && path.length >= 3);
   if (isDst()) {                // sewn now, as a colour of its own at the end
-    busy(true, "Sewing the shape…");
+    busy(true, d.rings ? "Sewing the text…" : "Sewing the shape…");
     try {
-      const r = await post("/api/cap/shape", { pts: path, closed, width_mm: d.width_mm,
+      const r = await post("/api/cap/shape", { ...(d.rings ? { rings: d.rings } : { pts: path, closed, width_mm: d.width_mm }),
         options: { density: 0.4, pull_comp: 0.2, order: "center" } });
       const j = await r.json();
       if (!r.ok || j.error) throw new Error(j.error || `Failed (${r.status})`);
@@ -987,13 +989,87 @@ async function addShape(d) {
   if (!C.lock) C.lock = C.info.mm_per_px;
   const id = (C.shapes.reduce((m, sh) => Math.max(m, sh.id), 0) || 0) + 1;
   if (t.num) C.shapeThreads[t.hex.toLowerCase()] = t;
-  C.shapes = [...C.shapes, { id, hex: t.hex.toLowerCase(), view: path, px: path.map(toPxFrame), closed,
-                             width: d.width_mm / C.lock, width_mm: d.width_mm, sewn: false }];
+  const shape = d.rings
+    ? { view: d.rings[0], px: d.rings[0].map(toPxFrame), rings: d.rings, pxRings: d.rings.map((r) => r.map(toPxFrame)), text: d.text }
+    : { view: path, px: path.map(toPxFrame) };
+  C.shapes = [...C.shapes, { id, hex: t.hex.toLowerCase(), ...shape, closed,
+                             width: (d.width_mm || 1.5) / C.lock, width_mm: d.width_mm || 1.5, sewn: false }];
   C.sels = ["draft:" + id];                     // selected, to move, resize, turn, recolour or delete
   setTool("select");
   markDirty();
-  toast(`${closed ? "Shape" : "Line"} added and selected. Click Update Digitizing to sew it.`);
+  toast(`${d.rings ? "Text" : closed ? "Shape" : "Line"} added and selected. Click Update Digitizing to sew it.`);
 }
+// ---------------------------------------------------------------- text
+// lettering in a font (the server turns it into outlines), placed in the middle of the view; a text
+// not sewn yet, selected, is changed in place (its words, font, height) where it stands
+function textDraft() {
+  const sh = C.sels.length === 1 && draftOf(C.sels[0]);
+  return sh && sh.text ? sh : null;
+}
+function textValues() {
+  return { text: $("#textInput").value, font: $("#textFont").value, height_mm: +$("#textHeight").value || 8,
+           spacing_mm: +$("#textSpacing").value || 0, align: $("#textAlign").value };
+}
+function showTextPreview() {
+  const p = $("#textPreview"), v = textValues();
+  p.style.fontFamily = `"emb-${v.font}", sans-serif`;
+  p.style.letterSpacing = `${v.spacing_mm * 2}px`;
+  p.style.textAlign = v.align;
+  p.textContent = v.text.trim() ? v.text : "Your Text";
+}
+function openTextMenu() {
+  for (const id of ["#drawMenu", "#penMenu", "#pathMenu", "#alignMenu", "#arrangeMenu", "#cornerMenu"]) $(id).hidden = true;
+  const m = $("#textMenu"), r = $("#toolText").getBoundingClientRect(), sh = textDraft();
+  if (sh) {                                     // the selected text: its settings, to change it
+    $("#textInput").value = sh.text.text; $("#textFont").value = sh.text.font; $("#textHeight").value = sh.text.height_mm;
+    $("#textSpacing").value = sh.text.spacing_mm; $("#textAlign").value = sh.text.align;
+  }
+  $("#textAdd").textContent = sh ? "Update text" : "Add text";
+  m.hidden = false;
+  m.style.left = `${r.right + 8}px`; m.style.top = `${Math.max(8, Math.min(window.innerHeight - m.offsetHeight - 8, r.top))}px`;
+  showThread(m); showTextPreview(); updateTools();
+  $("#textInput").focus();
+}
+async function addText() {
+  const v = textValues();
+  if (!v.text.trim()) { toast("Type some text first."); $("#textInput").focus(); return; }
+  if (!C.view) return;
+  busy(true, "Setting the text…");
+  let j;
+  try {
+    const r = await post("/api/cap/text", v);
+    j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || `Failed (${r.status})`);
+  } catch (e) { toast(e.message, true, 6000); return; }
+  finally { busy(false); }
+  if (j.missing.length) toast(`This font has no ${j.missing.join(" ")}: left as a space.`, true, 6000);
+  const old = textDraft();
+  let cx, cy;
+  if (old) {                                    // a text changed: where it stands now
+    const [a, b, c, e] = bbox(old.rings); cx = (a + c) / 2; cy = (b + e) / 2;
+  } else {                                      // a new one: the middle of the view (0.1 mm)
+    const cv = $("#canvas");
+    cx = C.view.x0 + cv.width / C.view.dpr / 2 / C.view.k; cy = C.view.y1 - cv.height / C.view.dpr / 2 / C.view.k;
+  }
+  const rings = j.rings.map((ring) => ring.map(([x, y]) => [cx + x * 10, cy + y * 10]));
+  if (old) {
+    remember();
+    Object.assign(old, { view: rings[0], px: rings[0].map(toPxFrame), rings, pxRings: rings.map((r) => r.map(toPxFrame)), text: v });
+    markDirty();
+    toast("Text changed. Click Update Digitizing to sew it.");
+    return;
+  }
+  await addShape({ rings, text: v });
+  if (isDst()) toast(`Text sewn: ${j.width_mm} × ${j.height_mm} mm.`);
+  $("#textMenu").hidden = true; updateTools();
+}
+for (const id of ["#textInput", "#textFont", "#textSpacing", "#textAlign"]) $(id).addEventListener("input", showTextPreview);
+$("#textFont").addEventListener("change", showTextPreview);
+$("#textAdd").addEventListener("click", addText);
+$("#textInput").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); addText(); } });
+$("#toolText").addEventListener("click", () => { if (!$("#textMenu").hidden) { $("#textMenu").hidden = true; updateTools(); return; } setTool("select"); openTextMenu(); });
+$("#textClose").addEventListener("click", () => { $("#textMenu").hidden = true; updateTools(); });
+$("#textThread").addEventListener("click", (ev) => openPalette(ev.currentTarget, (t) => { C.drawThread = t; showThread($("#textMenu")); }));
 // ---------------------------------------------------------------- corners
 C.cornerSel = [];                               // the corners picked (indices into the shape's points); none: all
 const SHAPE_KEY = /^shape#[0-9a-f]{6}:s(\d+)(\.\d+)?$/;
