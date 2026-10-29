@@ -3,6 +3,8 @@ vtracer==0.6.15
 numpy==2.5.4
 pillow==13.0.0
 shapely==2.2.0
+scipy==1.18.1
+onnxruntime==1.19.2
 ezdxf==1.4.5
 pyparsing==3.3.3
 fonttools==4.67.0

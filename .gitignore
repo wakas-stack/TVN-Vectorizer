@@ -9,3 +9,7 @@ dist/
 
 # macOS
 .DS_Store
+
+# benchmark output (made by bench/*.py)
+bench/out/
+bench/dbg/

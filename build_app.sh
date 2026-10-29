@@ -79,7 +79,8 @@ for A in arm64 x86_64; do
   # the interpreter lives in Contents/MacOS so macOS treats the window as this app (name, icon, Dock)
   cp "$APP/Contents/Resources/runtime-$A/bin/python3.12" "$APP/Contents/MacOS/python-$A"
 done
-cp "$HERE"/{app.py,engine.py,precise.py,export.py,patch.py,gang.py,desktop.py,selftest.py} "$APP/Contents/Resources/app/"
+cp "$HERE"/{app.py,engine.py,precise.py,planar.py,upscale.py,export.py,patch.py,gang.py,desktop.py,selftest.py} "$APP/Contents/Resources/app/"
+rsync -a --exclude ".DS_Store" "$HERE/models" "$APP/Contents/Resources/app/"
 rsync -a --exclude ".DS_Store" "$HERE/static" "$APP/Contents/Resources/app/"
 "$NATIVE_PY" -m compileall -q "$APP/Contents/Resources/app" >/dev/null
 cp "$BUILD/AppIcon.icns" "$APP/Contents/Resources/"

@@ -182,18 +182,40 @@ optional, and so is a box round each logo (off unless ticked; 0.5 pt black lines
 ## What is different
 
 vectorizer.ai's tracing engine runs on its own servers and is closed source, so this
-cannot be the same engine. Tracing here (Method: **Precise**, the default, in `precise.py`)
-gives every anti-aliased edge pixel to its two neighbouring colours in proportion, finds each
-colour's outline where it stops being the strongest colour to a fraction of a pixel (marching
-squares; neighbouring colours share one line, so there are no gaps or rims), and fits it with
-cubic Bezier curves (Schneider's method), keeping corners sharp. A pixel may only mix the
-colours found around it, so compression fringes do not become colours of their own, and the
-palette keeps a small colour (an overlap, a darker tip) when it fills a flat area of its own,
-or when it draws strokes of its own (thin line art, an engraved heart or date): its pixels hang
-together and see one other colour around them, where an edge blend sees two. Specks and
-slivers that are dropped hand their area to the colours around them, so they leave no gaps.
-On the bird test logo this halved the error along the edges against the old tracer
-(edge-band difference 14.8 -> 7.6, pixels off by more than 40: 0.83 % -> 0.17 %).
+cannot be the same engine. Tracing here (Method: **Precise**, the default, in `precise.py` and
+`planar.py`):
+
+1. **Palette.** Colours are found as before; anti-aliasing blends are dropped, and so are the
+   fringes a JPEG leaves round its edges (a colour close to another that fills no flat area and
+   draws no lines of its own). The image's compression noise is measured, and merging widens
+   with it, so a JPEG logo gets its real colours and a clean PNG keeps close shades apart.
+2. **Colour shares.** Every anti-aliased edge pixel is split between its two neighbouring
+   colours in proportion; a mild unsharp mask on the shares undoes some of the anti-aliasing
+   blur, so strokes thinner than a pixel survive.
+3. **Supersampling.** The shares are enlarged up to 8x (bicubic, about 4 million cells at most,
+   at least 2x) and each cell takes its strongest colour, so outlines follow the true edges to a
+   fraction of a pixel and small shapes have enough points to find their corners.
+4. **Planar map** (`planar.py`). The boundaries between colours form one network: junctions
+   where three colours meet, and edges between two colours. Each edge is fitted **once** and
+   both shapes beside it use that same fitted line, so neighbouring shapes meet exactly, with no
+   gaps or overlaps. Junctions blur over a pixel or two, so each one is moved to where its edges,
+   followed straight on, meet.
+5. **Fitting.** Corners are found where an outline turns sharply over 2 px and as sharply over
+   1 px (a circle's turn halves). Pixels round corners off, so each corner is rebuilt where its
+   two sides, followed straight on, meet. Straight sides become lines, the rest cubic Beziers
+   (Schneider) within 0.2 px of the outline (Smoothing 0-100 sets 0.1-0.3 px).
+
+0. **AI upscale** (`upscale.py`, images up to 1000 px). A small or blurred logo does not hold
+   its finest shapes (12 px lettering, the gap between two strokes). Real-ESRGAN x4plus anime 6B
+   (open source, made for drawings and flat colour) redraws the image larger with crisp edges, on
+   this Mac with onnxruntime; the tracer works on that (at twice the size) and scales the shapes
+   back. The colours still come from the image's own pixels. The model is
+   `models/realesrgan_anime6b_x4.onnx`, made from the official weights by
+   `tools/esrgan_to_onnx.py`; without it (or onnxruntime) tracing works as before. It adds about
+   10 s for a 440 px image on an Intel Mac; editing the palette afterwards reuses it.
+
+Measured with `bench/run.py` (below), against the tracer before these changes: pixels
+clearly wrong 1.89 % -> 0.88 %, edge error 24.0 -> 10.4, with about the same number of nodes.
 **Classic** uses the open-source [VTracer](https://github.com/visioncortex/vtracer) on an
 upscaled, palette-snapped copy; it is quicker on photos. Shape fitting, layering and export
 are written in `engine.py` and `export.py`. Results are
@@ -202,10 +224,31 @@ engine on photos, very small text and soft shadows. Symmetry modelling, corner-b
 control and centerline tracing are not implemented (vectorizer.ai has no centerline
 tracing either). Inputs above 3 megapixels are scaled down first.
 
+## Accuracy benchmark
+
+```bash
+.venv/bin/python bench/run.py                  # table + bench/out/sheet.png (truth | input | result)
+.venv/bin/python bench/run.py star text        # some cases only
+.venv/bin/python bench/run.py --opts "{'fit_tolerance': 0.15}"   # try an option
+```
+
+Each case in `bench/cases.py` is an exact SVG. It is drawn small (64 or 128 px, also as a
+JPEG), vectorized, and the result is drawn at 512 px and compared with the true SVG drawn at
+512 px: **bad%** pixels clearly the wrong colour, **edge** mean colour error near the true
+edges, **nodes** path segments written. Run it before and after a change to the tracer.
+
+`bench/holes.py` checks every case, and every image in `bench/real/`, for holes: parts of the
+source that no traced shape covers (drawn without the gap filler, which would hide them). It
+exits with an error when it finds one; run it after every change to the tracer. Put real images
+that once went wrong in `bench/real/` so they stay checked.
+
 ## Files
 
 - `engine.py` - palette, tracing, shape fitting, layers, SVG writing
-- `precise.py` - the Precise tracer: colour shares, sub-pixel outlines, Bezier fitting
+- `precise.py` - the Precise tracer: colour shares, supersampling, corner-aware line and Bezier fitting
+- `planar.py` - the planar map: shared edges between colours, junctions, outlines from shared edges
+- `upscale.py`, `models/`, `tools/esrgan_to_onnx.py` - AI upscale before tracing (Real-ESRGAN, onnxruntime)
+- `bench/` - accuracy benchmark (`run.py`, cases in `cases.py`), timing (`speed.py`), every mode through the API (`robust.py`)
 - `gang.py`, `static/gang.html`, `gang.js`, `gang.css` - Gang sheet
 - `export.py` - PDF, EPS, PNG and DXF output
 - `app.py` - local web server; `static/` - the pages
