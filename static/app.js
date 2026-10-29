@@ -7,7 +7,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const S = {
   file: null, name: "", srcURL: "", srcW: 0, srcH: 0,
   rasterURL: "", result: null, svgText: "",
-  trace: { max_colors: 0, palette: null, tracer: "precise", detail: 50, smoothing: 50, corner_threshold: 60, crop: null },
+  trace: { max_colors: 0, palette: null, tracer: "precise", detail: 50, smoothing: 50, corner_threshold: 45, crop: null },
   output: {
     shape_stacking: "cutouts", group_by: "color", fit_shapes: true,
     draw_style: "fill_shapes", gap_filler: true, gap_clip: false, gap_non_scaling: true, gap_width: 1.5,
@@ -18,6 +18,7 @@ const S = {
   view: "vectors", tool: "pan", zoom: 1, panX: 0, panY: 0, split: 0.5,
   selected: null, selectedSwatches: [], reqId: 0, traceKey: "", pending: null,
 };
+window.embHasWork = () => !!S.file;              // leave.js: a logo is open
 
 // ---------------------------------------------------------------- utilities
 function toast(msg, isError = false, ms = 3800) {

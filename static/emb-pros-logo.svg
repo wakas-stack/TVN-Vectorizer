@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 44" role="img" aria-label="EMB Pros">
+  <title>EMB Pros</title>
+  <!-- the mark: an embroidery hoop; inside it a line of running stitches, and the needle coming in
+       from the top right to make the last one -->
+  <g transform="translate(1 2)">
+    <circle cx="20" cy="21" r="17.2" fill="#fff3ec"/>
+    <circle cx="20" cy="21" r="17.2" fill="none" stroke="#ff5a1f" stroke-width="3.6"/>
+    <circle cx="20" cy="21" r="12.8" fill="none" stroke="#ff5a1f" stroke-width="1.1" opacity=".35"/>
+    <path d="M8 27.5 C 11.5 20.5, 16 31, 21.5 24.5" fill="none" stroke="#1d2230" stroke-width="2.3"
+          stroke-linecap="round" stroke-dasharray="3.2 2.5"/>
+    <path d="M39.5 0.8 L 23.6 21.4" stroke="#1d2230" stroke-width="2.6" stroke-linecap="round"/>
+    <ellipse cx="37.4" cy="3.5" rx="1" ry="2.3" transform="rotate(38 37.4 3.5)" fill="#fff3ec"/>
+  </g>
+  <!-- the name -->
+  <text x="51" y="31" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, sans-serif"
+        font-size="25" font-weight="800" letter-spacing="-0.4"><tspan fill="#1d2230">EMB</tspan><tspan fill="#ff5a1f" dx="5">Pros</tspan></text>
+</svg>

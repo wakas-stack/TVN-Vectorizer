@@ -26,7 +26,7 @@ def main(argv=None):
     ap.add_argument("--draw-style", default="fill_shapes", choices=["fill_shapes", "stroke_shapes", "stroke_edges"])
     ap.add_argument("--detail", type=int, default=50, help="0..100")
     ap.add_argument("--smoothing", type=int, default=50, help="0..100")
-    ap.add_argument("--corner-threshold", type=int, default=60, help="degrees")
+    ap.add_argument("--corner-threshold", type=int, default=45, help="degrees")
     ap.add_argument("--no-fit-shapes", action="store_true", help="keep circles/rectangles as plain paths")
     ap.add_argument("--no-gap-filler", action="store_true")
     ap.add_argument("--remove-background", action="store_true")

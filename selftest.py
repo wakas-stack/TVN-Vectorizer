@@ -55,10 +55,18 @@ def _snapshot(win, name):
     done.wait(10)
 
 
+def _open(win, url, ready="true", timeout=20):
+    """Load a page and wait until the window shows it: the page before has functions of the
+    same name (openFile), so waiting for those alone can pass before the new page is there."""
+    path = "/" + url.split("://", 1)[-1].split("/", 1)[-1].split("?")[0]
+    win.load_url(url)
+    return _wait(win, f"location.pathname === '{path}' && document.readyState === 'complete' && ({ready})", timeout)
+
+
 def run_checks(win, api):
     _step("page")
     out = {}
-    out["page_loaded"] = _wait(win, "typeof openFile === 'function' && !!window.pywebview && !!window.pywebview.api")
+    out["page_loaded"] = _open(win, api.base_url + "/", "typeof openFile === 'function' && !!window.pywebview && !!window.pywebview.api")
     out["user_agent"] = win.evaluate_js("navigator.userAgent")
     _step("upload")
     # upload an image the same way a drop or file pick does, then wait for the result
@@ -97,28 +105,24 @@ def run_checks(win, api):
     out["thread_button"] = bool(win.evaluate_js("!!document.querySelector('#threadBtn')"))
     _step("pantone")
     # Pantone page in the same engine
-    win.load_url(api.base_url + "/pantone?hex=E4002B,1E5AC8")
-    _wait(win, "document.querySelectorAll('.pm-group').length === 2", 20)
+    _open(win, api.base_url + "/pantone?hex=E4002B,1E5AC8", "document.querySelectorAll('.pm-group').length === 2")
     _step("pantone loaded")
     time.sleep(0.3)
     _snapshot(win, "pantone")
     out["pantone"] = win.evaluate_js("[...document.querySelectorAll('.pm-group')].map(g => g.querySelector('.pm-card .name').textContent + ' ' + g.querySelector('.pm-card .de').textContent.trim())")
     # CMYK input: the boxes come back from the address, and the colour is matched
-    win.load_url(api.base_url + "/pantone?cmyk=0,100,81,4")
-    _wait(win, "document.querySelectorAll('.pm-group').length === 1", 20)
+    _open(win, api.base_url + "/pantone?cmyk=0,100,81,4", "document.querySelectorAll('.pm-group').length === 1")
     _wait(win, "!!document.querySelector('#cmykRow .ci-profile') && document.querySelector('#cmykRow .ci-profile').textContent.includes('FOGRA39')", 10)
     out["pantone_cmyk"] = win.evaluate_js("[...document.querySelectorAll('#cmykRow input')].map(i => i.value).join(',') + ' -> ' + document.querySelector('#hexInput').value + ' (' + document.querySelector('#cmykRow .ci-profile').textContent + ') -> ' + document.querySelector('.pm-card .name').textContent")
     # Thread match page: the best Isacord and Madeira thread for each colour
     _step("thread")
-    win.load_url(api.base_url + "/thread?hex=F0E36A,0E6ACE")
-    _wait(win, "document.querySelectorAll('.pm-group').length === 2", 20)
+    _open(win, api.base_url + "/thread?hex=F0E36A,0E6ACE", "document.querySelectorAll('.pm-group').length === 2")
     time.sleep(0.3)
     _snapshot(win, "thread")
     out["thread"] = win.evaluate_js("[...document.querySelectorAll('.pm-group')].map(g => [...g.querySelectorAll('.th-best')].map(b => b.innerText.replace(/\\s+/g, ' ')))")
     # Patch mockup page: upload, each style, a large export
     _step("patch")
-    win.load_url(api.base_url + "/patch")
-    _wait(win, "typeof openFile === 'function'", 20)
+    _open(win, api.base_url + "/patch", "typeof openFile === 'function'")
     win.evaluate_js(DRAW_LOGO + """
       window.__pt = null;
       c.toBlob(async b => {
@@ -211,14 +215,13 @@ def run_checks(win, api):
     _step("patch done")
     # Gang sheet: a logo filling a Letter sheet, the vector PDF and a 300 dpi PNG
     _step("gang")
-    win.load_url(api.base_url + "/gang")
-    _wait(win, "typeof openFile === 'function'", 20)
+    _open(win, api.base_url + "/gang", "typeof openFile === 'function'")
     win.evaluate_js(DRAW_LOGO + """
       window.__gs = null;
       c.toBlob(async b => {
         try {
           await openFile(new File([b], 'logo.png', {type: 'image/png'}));
-          const o = {count: document.querySelector('#count').textContent, h: document.querySelector('#logoH').value};
+          const o = {count: document.querySelector('#count').textContent, h: document.querySelector('#logoList .lh').value};
           for (const f of ['pdf', 'png']) { const r = await sheetRequest(f, 300); const bl = await r.blob(); o[f] = [bl.type, bl.size, r.headers.get('X-Gang-Count')]; }
           o.save_url = typeof window.pywebview.api.save_url === 'function';
           // take one logo and the second row off; the sheet keeps its size
@@ -229,6 +232,20 @@ def run_checks(win, api):
           // Cmd+Z twice puts the row and the logo back
           for (let k = 0; k < 2; k++) { document.dispatchEvent(new KeyboardEvent('keydown', {key: 'z', metaKey: true, bubbles: true})); await new Promise(r => setTimeout(r, 900)); }
           o.undo = document.querySelector('#count').textContent;
+          // a second logo: take the top row off, its + asks which logo, the size and how many
+          document.querySelectorAll('.gs-row')[0].click(); await new Promise(r => setTimeout(r, 900));
+          document.querySelectorAll('.gs-row')[0].click(); await new Promise(r => setTimeout(r, 300));
+          const c2 = document.createElement('canvas'); c2.width = 300; c2.height = 300; const g2 = c2.getContext('2d');
+          g2.fillStyle = '#22a35a'; g2.beginPath(); g2.moveTo(150, 10); g2.lineTo(290, 290); g2.lineTo(10, 290); g2.fill();
+          const b2 = await new Promise(r => c2.toBlob(r, 'image/png'));
+          const dt = new DataTransfer(); dt.items.add(new File([b2], 'second.png', {type: 'image/png'}));
+          const pf = document.querySelector('#popFile'); pf.files = dt.files; pf.dispatchEvent(new Event('change'));
+          await new Promise(r => setTimeout(r, 1500));
+          document.querySelector('#popQty').value = 6;
+          document.querySelector('#popAdd').click(); await new Promise(r => setTimeout(r, 1500));
+          const r2 = await sheetRequest('pdf', 300);
+          o.second = {count: document.querySelector('#count').textContent, cards: document.querySelectorAll('.gs-card').length,
+                      logos: G.info.logos.map(l => l.on), pdf: r2.headers.get('X-Gang-Count')};
           window.__gs = o;
         } catch (e) { window.__gs = {error: String(e)}; }
       }, 'image/png');
@@ -236,4 +253,49 @@ def run_checks(win, api):
     _wait(win, "window.__gs !== null", 60)
     out["gang"] = win.evaluate_js("window.__gs")
     _snapshot(win, "gang")
+    # Cap DST: the logo digitized at front-panel size, the DST file and the preview sheet
+    _step("cap")
+    _open(win, api.base_url + "/cap", "typeof openFile === 'function'")
+    win.evaluate_js(DRAW_LOGO + """
+      window.__cap = null;
+      c.toBlob(async b => {
+        try {
+          await openFile(new File([b], 'logo.png', {type: 'image/png'}));
+          const before = {button: document.querySelector('#digitizeBtn').textContent, shown: !!C.img, stitches: !!C.st};   // the logo shown, not digitized
+          await digitize();
+          const o = {before, stats: document.querySelector('#stats').innerText, threads: [...document.querySelectorAll('#colors select')].map(s => s.selectedOptions[0].textContent)};
+          const dst = new Uint8Array(await (await request('/api/cap/file', {format: 'dst'})).arrayBuffer());
+          o.dst = [dst.length, new TextDecoder().decode(dst.slice(0, 3)), Array.from(dst.slice(-3))];
+          const png = await (await request('/api/cap/file', {format: 'png', labels: {}})).blob();
+          o.png = [png.type, png.size];
+          const pdf = await (await request('/api/cap/file', {format: 'pdf', title: 'selftest', chart: 'Isacord 40', threads: {}})).blob();
+          const pt = await pdf.text();
+          o.pdf = [pdf.type, pdf.size, (pt.match(/\\/Type \\/Page /g) || []).length];
+          o.order_default = document.querySelector('#order').value;                  // sewing starts at the centre
+          const cj = await (await request('/api/cap/stitches')).json();
+          const fs = cj.stitches.find((p) => p[2] === 0);
+          o.center_first = [fs[0], fs[1]];
+          const last = cj.info.pieces[cj.info.pieces.length - 1].key;              // editing: delete a piece
+          C.edits = {[last]: {deleted: true}}; C.lock = cj.info.mm_per_px;
+          const ej = await (await request('/api/cap/stitches')).json();
+          o.edit = {stitches: [cj.info.stitches, ej.info.stitches], pieces: [cj.info.pieces.length, ej.info.pieces.length],
+                    tools: !document.querySelector('#tools').hidden};
+          C.edits = {}; C.lock = null;
+          C.lock = cj.info.mm_per_px;                                               // a shape drawn on it
+          C.shapes = [{id: 1, hex: '#00a45a', closed: true, sewn: false, view: [], width: 10,
+                       px: [[20, 20], [120, 20], [120, 120], [20, 120]]}];
+          const sj = await (await request('/api/cap/stitches')).json();
+          o.shape = {stitches: sj.info.stitches - cj.info.stitches, piece: sj.info.pieces.some((p) => p.key === 'shape#00a45a:s1')};
+          C.shapes = []; C.lock = null;
+          document.querySelector('input[name="kind"][value="puff"]').click();     // 3D puff with tack-down
+          document.querySelector('#tackdown').checked = true;
+          const pj = await (await request('/api/cap/stitches')).json();
+          o.puff = {stops: pj.info.stops, stitches: pj.info.stitches, notes: pj.info.notes};
+          window.__cap = o;
+        } catch (e) { window.__cap = {error: String(e)}; }
+      }, 'image/png');
+    """)
+    _wait(win, "window.__cap !== null", 60)
+    out["cap"] = win.evaluate_js("window.__cap")
+    _snapshot(win, "cap")
     return out

@@ -9,3 +9,11 @@ dist/
 
 # macOS
 .DS_Store
+
+# website package (made by make_web.py) and the PDF libraries downloaded to test it
+web/dist/
+web/.testlibs/
+
+# benchmark output (made by bench/*.py)
+bench/out/
+bench/dbg/

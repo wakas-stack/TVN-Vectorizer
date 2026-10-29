@@ -38,7 +38,7 @@ DEFAULTS = {
     # tracing
     "tracer": "precise",          # precise | classic (VTracer)
     "detail": 50,                 # 0..100, higher keeps smaller features
-    "corner_threshold": 60,       # degrees; smaller = more corners
+    "corner_threshold": 45,       # degrees; smaller = more corners
     "smoothing": 50,              # 0..100, higher = smoother curves
     "fit_shapes": True,           # circles, ellipses, rectangles
     # output
@@ -110,6 +110,29 @@ def _grow(m: np.ndarray, r: int) -> np.ndarray:
     return out
 
 
+def noise_level(rgb: np.ndarray) -> float:
+    """Compression noise in flat areas, in Lab units: 0 for a clean PNG, about 1-3 for a JPEG.
+
+    How far pixels lie from their 5 x 5 median away from edges, at the 99.5th percentile (a large
+    JPEG's flat areas are clean and its noise rings round the edges), scaled to about 1-3."""
+    if rgb.shape[0] < 8 or rgb.shape[1] < 8:
+        return 0.0
+    med = np.stack([np.asarray(Image.fromarray(np.ascontiguousarray(rgb[..., k])).filter(ImageFilter.MedianFilter(5)))
+                    for k in range(3)], -1)
+    c16 = rgb.astype(np.int16)
+    step = np.zeros(rgb.shape[:2], np.int16)
+    for dy, dx in ((0, 1), (1, 0)):
+        d = np.abs(c16 - np.roll(np.roll(c16, dy, 0), dx, 1)).max(-1)
+        step = np.maximum(step, np.maximum(d, np.roll(np.roll(d, -dy, 0), -dx, 1)))
+    flat = np.asarray(Image.fromarray(((step < 40) * 255).astype(np.uint8)).filter(ImageFilter.MinFilter(3))) > 0
+    if flat.sum() < 64:
+        return 0.0
+    a, b = rgb[flat].astype(np.float64), med[flat].astype(np.float64)
+    if len(a) > 100_000:
+        k = np.random.default_rng(2).choice(len(a), 100_000, replace=False); a, b = a[k], b[k]
+    return 0.4 * float(np.percentile(np.linalg.norm(_rgb_to_lab(a) - _rgb_to_lab(b), axis=1), 99.5))
+
+
 def detect_palette(rgba: np.ndarray, max_colors: int = 0) -> list[tuple[int, int, int]]:
     """Return the palette colours, most common first.
 
@@ -146,6 +169,11 @@ def detect_palette(rgba: np.ndarray, max_colors: int = 0) -> list[tuple[int, int
         return [tuple(int(v) for v in c) for _, c in used[:max_colors]]
 
     total = sum(n for n, _ in used)
+    # compressed images drift around their true colours (JPEG blocks, chroma subsampling): merge
+    # and blend tolerances widen with the noise measured in flat areas; clean images keep 9 / 22
+    noise = noise_level(rgba[..., :3])
+    merge_de = 9.0 + 3.0 * noise
+    blend_tol = 22.0 + 8.0 * noise
     accepted: list[list] = []  # [count, rgb, lab]
     lab_img = None
     around = {}                # accepted colour index -> where it is, grown by 3 px
@@ -168,11 +196,43 @@ def detect_palette(rgba: np.ndarray, max_colors: int = 0) -> list[tuple[int, int
             if i not in around:
                 around[i] = _grow((np.linalg.norm(lab_img - a[2].astype(np.float32), axis=-1) < 12) & opaque, 3)
             seen += around[i]
-        return float((seen[m] >= 2).mean()) < 0.5
+        if float((seen[m] >= 2).mean()) < 0.5:
+            return True
+        # the same colour may also blend along other colours' edges elsewhere (a dark brown between
+        # a black outline and sand) and an engraving may have a lighter rim: so look at each clump
+        # on its own, and straight across it. A stroke has one colour on both sides (sand | brown |
+        # sand); a blend along an edge has a different colour on each side (yellow | halo | black)
+        try:
+            from scipy import ndimage
+        except ImportError:     # scipy cannot load (a Mac older than its build): a blend, as before
+            return False
+        comp, k = ndimage.label(m, np.ones((3, 3)))
+        if k == 0:
+            return False
+        sizes = np.bincount(comp.ravel())
+        nearest = np.argmin(np.stack([np.linalg.norm(lab_img - a[2].astype(np.float32), axis=-1) for a in accepted]), 0)
+        H_, W_ = m.shape
+        same = np.zeros(k + 1); seen_ = np.zeros(k + 1)
+        for dy, dx in ((0, 3), (3, 0), (2, 2), (2, -2)):
+            def shift(a, sy, sx, fill):
+                out = np.full_like(a, fill)
+                ys = slice(max(sy, 0), H_ + min(sy, 0)); yd = slice(max(-sy, 0), H_ + min(-sy, 0))
+                xs = slice(max(sx, 0), W_ + min(sx, 0)); xd = slice(max(-sx, 0), W_ + min(-sx, 0))
+                out[yd, xd] = a[ys, xs]
+                return out
+            fa, fb = shift(nearest, dy, dx, -1), shift(nearest, -dy, -dx, -2)
+            ma, mb = shift(m, dy, dx, True), shift(m, -dy, -dx, True)
+            oa, ob = shift(opaque, dy, dx, False), shift(opaque, -dy, -dx, False)
+            across = m & ~ma & ~mb & oa & ob                    # both sides lie outside the clump
+            seen_ += np.bincount(comp[across], minlength=k + 1)
+            same += np.bincount(comp[across & (fa == fb)], minlength=k + 1)
+        good = (sizes >= 20) & (seen_ >= 10) & (same >= 0.6 * np.maximum(seen_, 1))
+        good[0] = False
+        return int(sizes[good].sum()) >= 120
     for n, c in used:
         lab = _rgb_to_lab(c[None])[0]
         share = n / total
-        near = [a for a in accepted if np.linalg.norm(a[2] - lab) < 9.0]
+        near = [a for a in accepted if np.linalg.norm(a[2] - lab) < merge_de]
         if near:
             a = near[0]
             a[1] = (a[1] * a[0] + c * n) / (a[0] + n)
@@ -192,6 +252,12 @@ def detect_palette(rgba: np.ndarray, max_colors: int = 0) -> list[tuple[int, int
         line = None                     # worked out only when needed
         if share < 0.0015 and not (share > 0.0003 and (solid > 0.0008 or (line := stroke(lab)))):
             continue
+        # a minor colour close to an accepted one that is neither solid anywhere nor draws lines of
+        # its own only lines that colour's edges: JPEG ringing (darker or lighter than both sides)
+        if (share < 0.05 and accepted and solid <= 0.0008
+                and min(np.linalg.norm(a[2] - lab) for a in accepted) < 2 * merge_de + 2
+                and not (line if line is not None else (line := stroke(lab)))):
+            continue
         if share < 0.03 and len(accepted) >= 2:
             # drop anti-aliasing blends; they mix linearly in RGB between two accepted colours
             is_blend = False
@@ -200,7 +266,7 @@ def detect_palette(rgba: np.ndarray, max_colors: int = 0) -> list[tuple[int, int
                     p, r = accepted[i][1], accepted[j][1]
                     seg = r - p
                     t = np.clip(np.dot(c - p, seg) / max(np.dot(seg, seg), 1e-9), 0, 1)
-                    if 0.04 < t < 0.96 and np.linalg.norm(p + t * seg - c) < 22.0:
+                    if 0.04 < t < 0.96 and np.linalg.norm(p + t * seg - c) < blend_tol:
                         is_blend = True
                         break
                 if is_blend:
@@ -215,8 +281,11 @@ def detect_palette(rgba: np.ndarray, max_colors: int = 0) -> list[tuple[int, int
     pal = [tuple(int(round(v)) for v in a[1]) for a in accepted] or [(0, 0, 0)]
 
     # continuous-tone images (photos, gradients): add colours until the average
-    # colour error is small, so flat artwork keeps its small palette
-    sample = px[:: max(1, len(px) // 40_000)]
+    # colour error is small, so flat artwork keeps its small palette. Measured away from edges:
+    # anti-aliased and compressed edges are blends the tracer shares out, not missing colours
+    inner = rgba[..., :3][(step_ < 16) & opaque]
+    sample = inner if len(inner) > 0.2 * len(px) else px
+    sample = sample[:: max(1, len(sample) // 40_000)]
     lab_px = _rgb_to_lab(sample.astype(np.float64))
     def err(pl):
         lp = _rgb_to_lab(np.array(pl, dtype=np.float64))
@@ -449,8 +518,9 @@ def fit_loop(pts, max_dev=0.35):
         deficit = w * h - poly.area
         if deficit > 0:
             r = math.sqrt(deficit / (4 - math.pi))
-            if 0.75 < r < min(w, h) / 2 * 0.98:
-                prm2 = {**prm, "r": r}
+            if 0.75 < r:
+                # up to half the short side: a pill (a bar with round ends) is a rounded rectangle too
+                prm2 = {**prm, "r": min(r, min(w, h) / 2)}
                 found.append(("rect", prm2, dev("rect", prm2)))
     m = _area_moments(poly)
     if m:
@@ -499,6 +569,61 @@ def fit_whole_shape(sh: Shape, max_dev=0.35):
     return changed
 
 
+def fit_shared_shapes(shapes, idx, max_dev=0.35):
+    """fit_whole_shape for shapes that share their edges (the planar tracer).
+
+    A loop fitted with a circle, ellipse or rectangle is shared with the shape on its other side
+    (a ring's hole is the outline of the dot inside it): that loop gets the same primitive, so
+    the two still meet exactly. When nothing on the other side matches it as one loop and the
+    other side is not transparent, the loop is left as traced rather than open a gap."""
+    loops = []
+    for i, sh in enumerate(shapes):
+        for k, sp in enumerate(sh.subpaths):
+            pts = _flatten(sp)
+            if len(pts) >= 3:
+                xs = [q[0] for q in pts]; ys = [q[1] for q in pts]
+                loops.append((i, k, pts, _signed_area(pts), (min(xs), min(ys), max(xs), max(ys))))
+    if not loops:
+        return 0
+    B = np.array([lp[4] for lp in loops]); A = np.abs([lp[3] for lp in loops])
+    H, W = idx.shape
+    done = {}
+    for n, (i, k, pts, ar, bb) in enumerate(loops):
+        if (i, k) in done:
+            continue
+        f = fit_loop(pts, max_dev)
+        if not f:
+            continue
+        same = np.nonzero((np.abs(B - np.array(bb)).max(1) < 1.0) & (np.abs(A - abs(ar)) < 0.02 * abs(ar) + 0.5))[0]
+        partners = [m for m in same if loops[m][0] != i]
+        if not partners:
+            # alone is fine only against transparency: look just outside an outline, inside a hole
+            poly = make_valid(Polygon(pts)).buffer(1.2 if ar > 0 else -1.2)
+            if poly.is_empty:
+                continue
+            ring = np.asarray(getattr(poly, "exterior", None).coords if poly.geom_type == "Polygon" else [])
+            if not len(ring):
+                continue
+            xs = np.clip(ring[:, 0].astype(int), 0, W - 1); ys = np.clip(ring[:, 1].astype(int), 0, H - 1)
+            if (idx[ys, xs] != 255).mean() > 0.1:
+                continue
+        kind, prm = f
+        for m in [n] + partners:
+            done[(loops[m][0], loops[m][1])] = (kind, prm, loops[m][3] > 0)
+    changed = 0
+    for i, sh in enumerate(shapes):
+        mine = {k: v for (j, k), v in done.items() if j == i}
+        if not mine:
+            continue
+        sh.subpaths = [primitive_subpath(mine[k][0], mine[k][1], clockwise=mine[k][2]) if k in mine else sp
+                       for k, sp in enumerate(sh.subpaths)]
+        if len(sh.subpaths) == 1:
+            sh.kind, sh.params = mine[0][0], mine[0][1]
+        sh.poly, sh.shell = _poly_from_subpaths(sh.subpaths)
+        changed += len(mine)
+    return changed
+
+
 def shape_outline_subpaths(sh: Shape):
     """Subpaths for a shape, also for fitted primitives (used by DXF and edges)."""
     return sh.subpaths
@@ -512,6 +637,44 @@ def _load(data: bytes) -> Image.Image:
     if getattr(im, "is_animated", False):
         im.seek(0)
     return im.convert("RGBA")
+
+
+MAX_AI_SIDE = 1000
+_AI_CACHE: dict = {}        # (image hash, crop) -> upscaled image: palette edits re-trace without re-running it
+
+
+def _ai_available() -> bool:
+    try:
+        import upscale
+    except ImportError:
+        return False
+    return upscale.available()
+
+
+def _ai_upscaled(im, data: bytes, crop) -> "Image.Image":
+    import hashlib
+    import upscale
+    key = (hashlib.sha1(data).hexdigest(), repr(crop), im.size)
+    if key not in _AI_CACHE:
+        if len(_AI_CACHE) > 8:
+            _AI_CACHE.pop(next(iter(_AI_CACHE)))
+        _AI_CACHE[key] = upscale.upscale(im, 2)
+    return _AI_CACHE[key].copy()
+
+
+def _scale_sub(sub, f):
+    return [(op, tuple(v * f for v in p)) for op, p in sub]
+
+
+def _scale_shapes(shapes, f):
+    from shapely import affinity
+    for sh in shapes:
+        sh.subpaths = [_scale_sub(sp, f) for sp in sh.subpaths]
+        if sh.params:
+            sh.params = {k: (v * f if k in ("cx", "cy", "r", "rx", "ry", "w", "h") else v) for k, v in sh.params.items()}
+        sh.poly = affinity.scale(sh.poly, f, f, origin=(0, 0))
+        if sh.shell is not None:
+            sh.shell = affinity.scale(sh.shell, f, f, origin=(0, 0))
 
 
 def trace(data: bytes, opts: dict, want_shapes: bool = False) -> dict:
@@ -528,6 +691,15 @@ def trace(data: bytes, opts: dict, want_shapes: bool = False) -> dict:
         f = math.sqrt(MAX_INPUT_PIXELS / (im.width * im.height))
         im = im.resize((max(1, int(im.width * f)), max(1, int(im.height * f))), Image.LANCZOS)
         notes.append(f"Image downscaled to {im.width}x{im.height} (limit {MAX_INPUT_PIXELS // 1_000_000} MP).")
+    # small images: redrawn twice as large by the AI upscaler (upscale.py), traced, and the shapes
+    # scaled back, so 12 px lettering and hairline gaps come out as clean shapes
+    ai = 1
+    rgba_src = np.asarray(im).copy()          # the image's own colours: the palette comes from these
+    if (o.get("ai_upscale", True) and o.get("tracer", "precise") != "classic"
+            and max(im.size) <= MAX_AI_SIDE and _ai_available()):
+        im = _ai_upscaled(im, data, o.get("crop"))
+        ai = 2
+        notes.append("Upscaled with AI before tracing (fine detail redrawn).")
     W, H = im.size
     rgba = np.asarray(im).copy()
 
@@ -538,7 +710,8 @@ def trace(data: bytes, opts: dict, want_shapes: bool = False) -> dict:
         src = [hex_to_rgb(p["from"]) for p in o["palette"]]
         dst = [hex_to_rgb(p.get("to") or p["from"]) for p in o["palette"]]
     else:
-        src = detect_palette(rgba, max_colors)
+        # the palette from the image's own pixels: the upscaler redraws shapes, not colours
+        src = detect_palette(rgba_src, max_colors)
         dst = list(src)
 
     # colours sharing a target colour are merged before tracing, so shapes really merge
@@ -555,6 +728,7 @@ def trace(data: bytes, opts: dict, want_shapes: bool = False) -> dict:
         k = 1
         lab_pal = _rgb_to_lab(np.array(src, dtype=np.float64)).astype(np.float32)
         lab_px = _rgb_to_lab(rgba[..., :3].reshape(-1, 3)).astype(np.float32).reshape(H, W, 3)
+        o["_noise"] = noise_level(rgba[..., :3])
         S_src, transparent = precise.shares(rgba[..., :3], rgba[..., 3], np.array(src, np.float32), lab_px, lab_pal)
         del lab_px
         S = np.zeros((len(targets), H, W), np.float32)
@@ -573,6 +747,9 @@ def trace(data: bytes, opts: dict, want_shapes: bool = False) -> dict:
         stacking = "stacked" if o["shape_stacking"] == "stacked" else "cutout"
         palette_hex = [rgb_to_hex(c) for c in targets]
         shapes: list[Shape] = []
+        o["_palette"] = np.array(targets, np.float32)
+        o["_seams"] = []                  # (fitted edge, colour, colour, closed): the exact shared edges
+        o["_palette_hex"] = palette_hex
         for j, subs in precise.trace_colors(S, transparent, {bg_index} if bg_index is not None else set(), o):
             sh = Shape(sid=f"s{len(shapes) + 1}", color=palette_hex[j], subpaths=subs)
             sh.poly, sh.shell = _poly_from_subpaths(subs)
@@ -676,8 +853,17 @@ def trace(data: bytes, opts: dict, want_shapes: bool = False) -> dict:
 
     fitted_loops = 0
     if o["fit_shapes"] and o["draw_style"] != "stroke_edges":
-        for sh in shapes:
-            fitted_loops += fit_whole_shape(sh)
+        if precise_mode and o.get("shared_edges", True):
+            fitted_loops = fit_shared_shapes(shapes, idx)
+        else:
+            for sh in shapes:
+                fitted_loops += fit_whole_shape(sh)
+
+    if ai != 1:          # back to the image's own pixels
+        _scale_shapes(shapes + removed_shapes, 1 / ai)
+        o["_seams"] = [(_scale_sub(sub, 1 / ai), a, b, c) for sub, a, b, c in (o.get("_seams") or [])]
+        W, H = W // ai, H // ai
+        counts = np.asarray(counts) // (ai * ai)
 
     _assign_layers(shapes, stacking)
     _assign_parents(shapes)
@@ -906,9 +1092,16 @@ def build_svg(shapes, W, H, o, notes, removed_shapes=()):
             # strokes only along edges shared by two shapes, in the average of their colours
             body.append(layer_attrs("gap-filler", "Gap filler"))
             seams: dict[str, list[str]] = {}
-            for ln, c, n in _edges(shapes, "cutout"):
-                if n >= 2:
-                    seams.setdefault(c, []).append("M" + "L".join(f"{_fmt(x)} {_fmt(y)}" for x, y in ln.coords))
+            if o.get("_seams") and o.get("_palette_hex"):
+                # the planar tracer's own fitted edges: the stroke lies exactly on the shared curve
+                ph = o["_palette_hex"]
+                for sub, a, b, closed in o["_seams"]:
+                    d = "".join(op + " ".join(_fmt(v) for v in p) for op, p in sub) + ("Z" if closed else "")
+                    seams.setdefault(_avg(ph[a], ph[b]), []).append(d)
+            else:
+                for ln, c, n in _edges(shapes, "cutout"):
+                    if n >= 2:
+                        seams.setdefault(c, []).append("M" + "L".join(f"{_fmt(x)} {_fmt(y)}" for x, y in ln.coords))
             for c, ds in seams.items():
                 body.append(f'<path class="gap" d="{"".join(ds)}" fill="none" stroke="{c}" stroke-width="{_fmt(float(o["gap_width"]))}" stroke-linecap="round" stroke-linejoin="round"{nss(o["gap_non_scaling"])}/>')
             body.append("</g>")

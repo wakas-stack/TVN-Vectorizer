@@ -1,4 +1,5 @@
-"""Patch mockups: show a logo as an embroidered, woven, dye-sublimated or leather patch.
+"""Patch mockups: show a logo as an embroidered, woven, dye-sublimated, leather, PVC rubber,
+silicone, suede or HTV (heat transfer vinyl) patch.
 
 The logo is traced into colour regions (engine.trace). Raised thread, borders and
 pressed leather are built from those vector regions: shrinking a region step by step
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import io
 import math
+import os
 import re
 from collections import OrderedDict
 from functools import lru_cache
@@ -24,7 +26,20 @@ from shapely.validation import make_valid
 
 import engine
 
-STYLES = ("embroidery", "woven", "sublimated", "leather")
+# memory each logo may keep for drawing it again (masks, height maps at each size): the newest kept
+CACHE_BYTES = int(os.environ.get("EMB_CACHE_MB", "512")) * 2 ** 20
+
+
+def _nbytes(v):
+    if isinstance(v, np.ndarray):
+        return v.nbytes
+    if isinstance(v, (tuple, list)):
+        return sum(_nbytes(x) for x in v)
+    return 0
+
+
+STYLES = ("embroidery", "woven", "sublimated", "leather", "pvc", "silicone", "suede", "htv")
+SEAMED = ("leather", "suede")          # a stitched seam on the patch (not a textile border)
 
 DEFAULTS = {
     "style": "embroidery",
@@ -32,9 +47,10 @@ DEFAULTS = {
     "recolor": {},            # {"#rrggbb": "#rrggbb"} colour changes
     "shape": "outline",       # outline | logo | circle | rounded | rectangle
     "fabric_color": None,     # fabric when no logo colour is the fabric (None = contrast with the thread)
-    "border": "merrow",       # merrow | satin | laser | none   (leather: seam | none)
+    "border": "merrow",       # merrow | satin | laser | none   (leather, suede: seam | none; pvc, silicone: rim | none)
     "border_color": None,     # None = same as the fabric
     "border_width": 0.035,    # fraction of the patch size
+    "border_thickness": 1.0,  # how thick the border stands (merrow, satin, rim) or how dark (laser), 0.3..2.5
     "relief": 0.7,            # 0..1 raised thread / pressing depth
     "density": 1.0,           # thread density, 0.5..2
     "angle": 45,              # stitch direction, degrees
@@ -49,11 +65,11 @@ DEFAULTS = {
     "outline": "none",        # shape "logo": none | filled (an even band around the logo, like a sticker)
     "outline_width": 0.03,    # band width, fraction of the logo size
     "outline_color": None,    # band colour (None = contrast with the logo)
-    "seam_color": "#efe3c8",
+    "seam_color": "#000000",
     "seam_style": "stitch",   # leather seam: stitch (dashes) | dotted | solid
     "seam_width": 0.006,      # seam thread thickness, fraction of the patch size
-    "background": "transparent",  # transparent | #rrggbb
-    "shadow": True,
+    "background": "#ffffff",      # transparent | #rrggbb
+    "shadow": False,
 }
 
 
@@ -66,9 +82,12 @@ def _box_blur(a, r, axis):
     pad = [(0, 0)] * a.ndim
     pad[axis] = (r + 1, r)
     c = np.cumsum(np.pad(a, pad, mode="edge"), axis=axis, dtype=np.float64)
-    hi = np.take(c, np.arange(2 * r + 1, c.shape[axis]), axis=axis)
-    lo = np.take(c, np.arange(0, c.shape[axis] - 2 * r - 1), axis=axis)
-    return ((hi - lo) / (2 * r + 1)).astype(np.float32)
+    n, hi, lo = c.shape[axis], [slice(None)] * a.ndim, [slice(None)] * a.ndim
+    hi[axis], lo[axis] = slice(2 * r + 1, n), slice(0, n - 2 * r - 1)
+    d = c[tuple(hi)] - c[tuple(lo)]       # the two ends read in place (no copies): less memory
+    del c
+    d /= 2 * r + 1
+    return d.astype(np.float32)
 
 
 def blur(a, sigma):
@@ -116,8 +135,10 @@ def _fill_holes(geom):
 
 class Analysis:
     def __init__(self, data: bytes):
+        # no AI upscale: a mockup or a DST needs the logo's shapes, not its finest detail, and
+        # the upscaler would add some 40 s (and its memory) to every new logo
         r = engine.trace(data, {"shape_stacking": "cutouts", "fit_shapes": True, "gap_filler": False,
-                                "group_by": "none"}, want_shapes=True)
+                                "group_by": "none", "ai_upscale": False}, want_shapes=True)
         self.width, self.height = r["width"], r["height"]
         # background: shapes of the image's border colour that touch the image border or
         # the outside of the logo (the tracer sometimes leaves strips of background behind)
@@ -172,6 +193,7 @@ class Analysis:
                 self.default_roles[c] = "base" if "base" not in self.default_roles.values() else "thread"
         self.suggested_shape = "logo" if single else "outline"
         self._cache: OrderedDict = OrderedDict()
+        self._bytes = 0
 
     def info(self):
         return {"width": self.width, "height": self.height, "colors": self.colors,
@@ -184,8 +206,10 @@ class Analysis:
             return self._cache[key]
         val = fn()
         self._cache[key] = val
-        while len(self._cache) > 48:
-            self._cache.popitem(last=False)
+        self._bytes += _nbytes(val)
+        # at most 48 things, and at most CACHE_BYTES of arrays: the oldest go first
+        while len(self._cache) > 1 and (len(self._cache) > 48 or self._bytes > CACHE_BYTES):
+            self._bytes -= _nbytes(self._cache.popitem(last=False)[1])
         return val
 
 
@@ -491,12 +515,12 @@ def render(an: Analysis, opts: dict, size: int = 1000) -> Image.Image:
     thread_colors = [c for c in kept_colors if roles[c] == "thread"]
     if outlined:
         fabric = outline_col
+    elif o.get("fabric_color"):        # the backing's colour chosen on the page: over the logo's own
+        fabric = o["fabric_color"]
     elif base_colors:
         fabric = col(base_colors[0])
     elif o["shape"] == "logo" and thread_colors:   # nothing behind the logo: no fabric colour at its edges
         fabric = col(thread_colors[0])
-    elif o.get("fabric_color"):
-        fabric = o["fabric_color"]
     else:   # no fabric colour in the logo: contrast with the thread
         lum = sum(engine.hex_to_rgb(col(thread_colors[0]))) / 765 if thread_colors else 0
         fabric = "#efece4" if lum < 0.5 else "#1f1f23"
@@ -507,7 +531,7 @@ def render(an: Analysis, opts: dict, size: int = 1000) -> Image.Image:
     masks = {c: an.cached(("m", c) + mkey, lambda c=c: cv.raster(region(c).intersection(patch))) for c in kept_colors}
 
     # albedo of the fabric: main fabric colour, other "base" colours printed on it
-    textile = style != "leather"
+    textile = style in ("embroidery", "woven", "sublimated")      # thread and fabric: never a flat black
     lift = (lambda c: 0.055 + 0.945 * c) if textile else (lambda c: c)
     albedo = np.empty((h, w, 3), np.float32)
     albedo[:] = lift(_rgb(fabric))
@@ -621,6 +645,80 @@ def render(an: Analysis, opts: dict, size: int = 1000) -> Image.Image:
         gloss += 0.5 + 0.3 * tw
         sheen = 0.12 + 0.35 * float(o["gloss"])
         ambient = 0.5
+    elif style in ("pvc", "silicone"):
+        # moulded PVC rubber or silicone: solid colours, the patch a smooth plate with rounded edges and
+        # each logo colour a raised layer on it, sloping down at its edges (so a fine groove runs where
+        # two colours meet). PVC is semi-gloss with crisp moulded steps; silicone is softer, domed,
+        # satin-matte, and a little translucent at its edges
+        pvc = style == "pvc"
+        layer = (0.004 + 0.012 * relief) * E if pvc else (0.003 + 0.011 * relief) * E
+        rad = (0.005 if pvc else 0.011) * E
+        plate = np.sin(np.pi / 2 * np.clip(edge * 1.4, 0, 1)) * layer * 0.9
+        Hm += plate                    # moulded: smooth, no texture of its own
+        for c in thread_colors:
+            m = masks[c]
+            if not m.any():
+                continue
+            d = an.cached(("d", c, round(rad, 1)) + mkey, lambda c=c: cv.depth(region(c).intersection(patch), rad))
+            dd = np.clip(blur(d, max(1.0, E * 0.0015)), 0, 1)        # the edge-distance steps smoothed out
+            prof = np.sqrt(np.clip(1 - (1 - dd) ** 2, 0, 1)) if pvc else dd * dd * (3 - 2 * dd)     # silicone: soft shoulders
+            Hm += m * prof * layer
+            albedo += m[..., None] * (_rgb(col(c)) - albedo)
+            if not pvc:      # light passes through the thin silicone at its edges
+                albedo += (m * (1 - dd) ** 3 * 0.08)[..., None] * (1 - albedo)
+        gloss += 0.75 if pvc else 0.45
+        sheen = (0.1 + 0.4 * float(o["gloss"])) if pvc else (0.05 + 0.22 * float(o["gloss"]))
+        ambient = 0.42
+    elif style == "htv":
+        # heat transfer vinyl: thin cut vinyl pressed onto the garment; flat solid colours with a
+        # crisp, very slightly raised edge and a satin sheen; the fabric's weave shows faintly through
+        sp = E / 520
+        a = math.radians(62)
+        tw = 0.5 - 0.5 * np.cos(2 * np.pi * (X * math.cos(a) + Y * math.sin(a)) / sp)
+        Hm += tw * sp * 0.22
+        thick = (0.0005 + 0.001 * relief) * E
+        for c in thread_colors:
+            m = masks[c]
+            if not m.any():
+                continue
+            Hm += np.clip(blur(m, max(0.8, E * 0.0012)) * 1.15, 0, 1) * m * thick - m * tw * sp * 0.16   # the vinyl smooths the weave over
+            albedo += m[..., None] * (_rgb(col(c)) - albedo)
+        vinyl = np.clip(sum((masks[c] for c in thread_colors), np.zeros((h, w), np.float32)), 0, 1)
+        gloss += vinyl * 0.6 + (1 - vinyl) * (0.45 - 0.15 * tw)      # the vinyl's sheen is even; the fabric's follows the weave
+        sheen = 0.08 + 0.32 * float(o["gloss"])
+        ambient = 0.45
+    elif style == "suede":
+        # suede: a soft matte nap, its fibres catching the light unevenly in soft patches; no shine.
+        # The logo is debossed, embossed or laser engraved into it, as on leather
+        leather = _rgb(o["leather_color"])
+        nap = value_noise(h, w, E / 700, seed)
+        fibre = value_noise(h, w, E / 260, seed + 1)
+        brushed = value_noise(h, w, E / 30, seed + 2)
+        Hm += (nap * 0.6 + fibre * 0.4) * E * 0.0005
+        albedo[:] = leather * (0.84 + 0.1 * fibre + 0.12 * brushed + 0.05 * nap)[..., None]
+        Hm += np.sqrt(np.clip(1 - (1 - np.clip(edge * 1.6, 0, 1)) ** 2, 0, 1)) * E * 0.01
+        depth = (0.003 + 0.011 * relief) * E
+        rad = 0.008 * E
+        for c in (thread_colors if o["shape"] != "logo" or outlined else []):
+            m = masks[c]
+            d = an.cached(("d", c, round(rad, 1)) + mkey, lambda c=c: cv.depth(region(c).intersection(patch), rad))
+            prof = np.sqrt(np.clip(1 - (1 - d) ** 2, 0, 1)) * m
+            finish = o["leather_finish"]
+            if finish == "emboss":
+                Hm += prof * depth
+                albedo *= (1 + 0.05 * prof)[..., None]
+            elif finish == "engrave":      # the laser burns the nap away: darker and smooth
+                burn = _rgb(o["engrave_color"]) if o["engrave_color"] else leather * 0.42
+                albedo += m[..., None] * (burn - albedo) * 0.9
+                Hm -= m * E * 0.0006
+                gloss += m * 0.2
+            else:                          # pressed: the nap flattened, darker and a little smoother
+                Hm -= prof * depth
+                albedo *= (1 - 0.32 * prof)[..., None]
+                gloss += prof * 0.25
+        gloss += 0.05
+        sheen = 0.02 + 0.08 * float(o["gloss"])
+        ambient = 0.4
     else:  # leather
         leather = _rgb(o["leather_color"])
         grain1 = value_noise(h, w, E / 160, seed)
@@ -668,9 +766,10 @@ def render(an: Analysis, opts: dict, size: int = 1000) -> Image.Image:
 
     # ---------------------------------------------------------------- border
     border = o["border"]
-    bcol = _rgb(o["border_color"] or (fabric if style != "leather" else o["seam_color"]))
+    thick = float(np.clip(float(o["border_thickness"] or 1), 0.3, 2.5))
+    bcol = _rgb(o["border_color"] or (o["seam_color"] if style in SEAMED else fabric))
     flat_seam = None
-    if style == "leather":
+    if style in SEAMED:
         if border != "none":
             # seam line inset from the edge; flat, painted on after the lighting (no relief or shadow)
             sw_px = float(np.clip(float(o["seam_width"]), 0.001, 0.03)) * E
@@ -683,34 +782,57 @@ def render(an: Analysis, opts: dict, size: int = 1000) -> Image.Image:
     elif border in ("merrow", "satin"):
         ring = (edge < 0.999).astype(np.float32) * P
         t = np.clip(edge, 0, 1)
-        tube = np.sqrt(np.clip(1 - (2 * t - 1) ** 2, 0, 1)) * bw_px * (0.5 if border == "merrow" else 0.25)
+        tube = np.sqrt(np.clip(1 - (2 * t - 1) ** 2, 0, 1)) * bw_px * (0.5 if border == "merrow" else 0.25) * thick
         cx, cy = w / 2, h / 2
         ang = np.arctan2(Y - cy, X - cx)
         rmean = math.sqrt(P.sum() / math.pi)
         rope_p = max(2.0, bw_px * 0.32)
         rope = 0.5 - 0.5 * np.cos(2 * np.pi * (ang * rmean / rope_p + t * bw_px / rope_p * (0.9 if border == "merrow" else 0.2)))
         rope = rope ** 0.7
-        Hm = Hm * (1 - ring) + ring * np.maximum(Hm, tube + rope * rope_p * 0.3)
+        Hm = Hm * (1 - ring) + ring * np.maximum(Hm, tube + rope * rope_p * 0.3 * thick)
         albedo += ring[..., None] * (lift(bcol) * (0.8 + 0.3 * rope)[..., None] - albedo)
         gloss = gloss * (1 - ring) + ring * (0.4 + 0.6 * rope)
+    elif border == "rim" and style in ("pvc", "silicone"):
+        # a moulded rim round the edge, a little higher than the logo layers
+        ring = (edge < 0.999).astype(np.float32) * P
+        rim = np.sin(np.pi * np.clip(edge, 0, 1)) * (0.004 + 0.012 * relief) * E * (1.25 if style == "pvc" else 1.0) * thick
+        Hm = Hm * (1 - ring) + ring * np.maximum(Hm, rim + Hm * 0.5)
+        albedo += ring[..., None] * (bcol - albedo)
     elif border == "laser":
-        lip = np.clip(1 - edge / 0.08, 0, 1) * P
-        albedo *= (1 - 0.35 * lip)[..., None]
+        lip = np.clip(1 - edge / (0.08 * thick ** 1.5), 0, 1) * P          # 1x: as it always was
+        albedo *= (1 - min(0.8, 0.35 * thick) * lip)[..., None]
+
+    # the textures and fields the styles and borders were built from are done with: let them go
+    # (memory: a large picture holds dozens of these at once)
+    X = Y = tex = tdir = D = ms = mf = tw = fine = n = weave = warp = weft = over = None
+    grain1 = grain2 = pores = cells = photo = nap = fibre = brushed = prof = d = m = None
+    ring = t = tube = ang = rope = lip = rim = th = aniso = edge_dark = breaks = ct = fab = None
 
     # ---------------------------------------------------------------- light
     Hm *= P
     # shape (puff, border, pressing) gets shading and shadows; thread texture only adds
-    # detail around the true colour, so fine ridges do not darken the whole surface
+    # detail around the true colour, so fine ridges do not darken the whole surface; each
+    # field is let go as soon as it has been used
     Hmac = blur(Hm, max(1.0, E / 260))
     shade, _ = _shade(Hmac, L, ambient)
     fine, _ = _shade(Hm, L, ambient)
     detail = np.clip(fine - blur(fine, max(1.5, E / 150)) + 1.0, 0.55, 1.45)
+    fine = None
     _, spec = _shade(Hm, L, ambient, ks=1.0, shin=14.0)
+    Hm = None
     occl = _cast_shadow(Hmac, L, max(1.5, float(Hmac.max()) * 1.3))
     ao = np.clip((blur(Hmac, max(1.0, E * 0.006)) - Hmac) / max(1e-6, E * 0.004), 0, 1)
+    Hmac = None
     shade *= detail * (1 - 0.55 * occl) * (1 - 0.35 * ao)
-    rgb = albedo * shade[..., None] + (sheen * gloss * spec)[..., None]
-    rgb = np.clip(rgb, 0, 1)
+    detail = occl = ao = None
+    shine = sheen * gloss
+    shine *= spec
+    gloss = spec = None
+    rgb = albedo * shade[..., None]
+    albedo = shade = None
+    rgb += shine[..., None]
+    shine = None
+    np.clip(rgb, 0, 1, out=rgb)
     if flat_seam is not None:
         rgb += flat_seam[..., None] * (bcol - rgb)
 
@@ -725,11 +847,17 @@ def render(an: Analysis, opts: dict, size: int = 1000) -> Image.Image:
         out[..., 3] = sh
     a = alpha[..., None]
     out[..., :3] = rgb * a
+    rgb = None
     out[..., 3] = alpha + out[..., 3] * (1 - alpha)
     # un-premultiply
     nz = out[..., 3:] > 1e-6
     out[..., :3] = np.where(nz, out[..., :3] / np.maximum(out[..., 3:], 1e-6), 0)
-    img = Image.fromarray((np.clip(out, 0, 1) * 255 + 0.5).astype(np.uint8), "RGBA")
+    nz = None
+    np.clip(out, 0, 1, out=out)
+    out *= 255
+    out += 0.5
+    img = Image.fromarray(out.astype(np.uint8), "RGBA")
+    out = None
     if o["background"] and o["background"] != "transparent":
         bg = Image.new("RGBA", img.size, tuple(engine.hex_to_rgb(o["background"])) + (255,))
         img = Image.alpha_composite(bg, img)
@@ -831,7 +959,7 @@ def leather_pdf(an: Analysis, opts: dict, width_in: float = 4.0) -> bytes:
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {W:.3f} {H:.3f}] /Contents 4 0 R /Resources << /Properties << {props} >> >> >>".encode(),
         f"<< /Length {len(stream)} /Filter /FlateDecode >>\nstream\n".encode() + stream + b"\nendstream",
-        b"<< /Producer (Vectorizer Local) /Title (Leather patch) >>",
+        b"<< /Producer (EMB Pros) /Title (Leather patch) >>",
     ] + [f"<< /Type /OCG /Name ({g}) >>".encode() for g in groups]
     out = bytearray(b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n")
     offsets = []

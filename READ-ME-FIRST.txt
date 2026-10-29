@@ -1,9 +1,10 @@
-VECTORIZER LOCAL - for Mac
-==========================
+EMB PROS - for Mac
+==================
 
 Turns images (PNG, JPG, GIF, BMP, WebP) into editable, layered vector files
-(SVG, PDF, EPS, DXF, PNG), matches hex colours to Pantone colours, and shows
-logos as embroidered, woven, dye-sublimated or leather patch mockups.
+(SVG, PDF, EPS, DXF, PNG), matches hex colours to Pantone colours, shows
+logos as embroidered, woven, dye-sublimated or leather patch mockups, fills
+gang sheets, and digitizes logos into Tajima DST embroidery files for caps.
 Everything runs on your Mac. No internet and nothing to install.
 
 Works on Apple Silicon (M1-M4) and Intel Macs, macOS 11 Big Sur or newer
@@ -12,13 +13,13 @@ Works on Apple Silicon (M1-M4) and Intel Macs, macOS 11 Big Sur or newer
 
 1. INSTALL
 ----------
-Drag "Vectorizer Local.app" into your Applications folder
+Drag "EMB Pros.app" into your Applications folder
 (or keep it anywhere you like).
 
 
 2. OPEN
 -------
-Double-click "Vectorizer Local.app".
+Double-click "EMB Pros.app".
 
 The first time on a new Mac, macOS may say it "could not verify" the app,
 because it is not registered with Apple. That happens when the app arrives
@@ -27,14 +28,14 @@ by AirDrop, download, email or a chat app. To allow it, once:
   macOS 15 Sequoia or newer:
     1. Click "Done" in the warning.
     2. Open System Settings > Privacy & Security.
-    3. Scroll down to "Vectorizer Local was blocked..." and click "Open Anyway".
+    3. Scroll down to "EMB Pros was blocked..." and click "Open Anyway".
     4. Enter your Mac password, then click "Open".
 
   macOS 14 Sonoma or older:
     Right-click (or Control-click) the app, choose "Open", then click "Open".
 
   Or, in Terminal (any macOS version):
-    xattr -dr com.apple.quarantine "/Applications/Vectorizer Local.app"
+    xattr -dr com.apple.quarantine "/Applications/EMB Pros.app"
 
 After that it opens with a normal double-click.
 Copying it with a USB stick or external drive usually avoids the warning.
@@ -42,21 +43,22 @@ Copying it with a USB stick or external drive usually avoids the warning.
 
 3. USE
 ------
-- "Vectorizer" (top left): drop, paste (Cmd+V) or choose an image. Adjust the
+- "Logo Vectorizer" (top): drop, paste (Cmd+V) or choose an image. Adjust the
   palette, layers and editing tools on the right, then click "Download" and
   choose where to save.
-- "Pantone match": type or paste hex codes (e.g. #E4002B) to see the closest
+- "Pantone Match": type or paste hex codes (e.g. #E4002B) to see the closest
   Pantone colours. "Match palette to Pantone" in the Vectorizer opens it with
   the image's colours.
-- "Thread match": type or paste hex codes to see the closest Isacord 40 and
+- "Thread Match": type or paste hex codes to see the closest Isacord 40 and
   Madeira Polyneon 40 embroidery threads (number and name). "Match to thread"
   in the Vectorizer opens it with the image's colours.
 - On both match pages, the Hex / RGB / CMYK buttons let you enter an RGB
   (0-255) or CMYK (0-100%) colour instead of a hex code. CMYK is read as
   printed with the Coated FOGRA39 press profile (ISO 12647-2, coated paper);
   CMYK made for another press or paper can differ.
-- "Patch mockup": drop a logo (PNG, JPG, WebP, GIF, BMP or SVG) to see it as an
-  embroidered, woven, dye-sublimated or leather patch. Pick which colours are
+- "Patch Mockup": drop a logo (PNG, JPG, WebP, GIF, BMP or SVG) to see it as an
+  embroidered, woven, dye-sublimated, leather, PVC rubber, silicone, suede or
+  HTV (heat transfer vinyl) patch. Pick which colours are
   fabric or thread, the shape, border and look, then "Download PNG".
   For Faux/Leather, pick a Heritage Leatherette sheet (Lone Star Adhesive)
   under Look; an engraved logo shows the sheet's core colour. "Logo size"
@@ -73,7 +75,7 @@ Copying it with a USB stick or external drive usually avoids the warning.
   one solid logo. "Download PDF" (Faux/Leather) saves a layered vector PDF:
   the shape in white with a thin outline, the logo in black and the stitch
   lines, each on its own layer.
-- "Gang sheet": add one logo (PDF, AI saved PDF compatible, SVG, PNG, JPG,
+- "Gang Sheet Maker": add one logo (PDF, AI saved PDF compatible, SVG, PNG, JPG,
   WebP or TIFF), choose the sheet size and the logo size, and the sheet is
   filled with as many logos as fit (turned 90 degrees when more fit). Gap,
   margin, a box round each logo and the sheet border can be changed.
@@ -84,6 +86,56 @@ Copying it with a USB stick or external drive usually avoids the warning.
   Cmd+Z (Ctrl+Z) or the Undo button undoes the last change, up to 50 times.
   EPS logos cannot be read on a Mac (macOS has no PostScript
   reader any more): save them as PDF first.
+- "DST Maker": turns a logo into a Tajima .DST embroidery file for a cap (read
+  by Tajima and Happy machines), or opens a .DST file to view and edit.
+  * Choose a logo (PNG, JPG or PDF). It shows as it is; click "Digitize" to
+    make the stitches. Set the size on the right (width and height keep the
+    logo's proportions; Area gives the common cap sizes), and Flat or 3D puff.
+    After any change the button says "Update Digitizing": click it to sew the
+    changes.
+  * Sewing starts at the centre of the design and works outwards, as caps
+    need, one line of lettering at a time (the middle letter, then right,
+    then left, then the next line). Threads: each colour gets the nearest Isacord 40, Madeira Polyneon
+    40 or Robison-Anton thread; the palette button picks any thread.
+  * The preview shows the stitches as thread, with the design's details
+    (size, stitches, colours, trims...) under it. The play button shows the
+    sewing order.
+  * Tools on the left:
+      Select       click a piece (shift-click or drag a box for several);
+                   drag to move, a corner to resize, the knob to turn
+      Shapes       circle, square, rectangle, star, heart and more: pick
+                   one, then drag it out on the design
+      Pen          click to place points, drag to curve; click the first
+                   point to close a filled shape, or Enter for a line;
+                   Option-click a point to take its handles away (the
+                   last point: the next line starts straight)
+      Zoom (Z)     click to zoom in, Option-click to zoom out, drag to move;
+                   zoom in / zoom out / Fit buttons; pinch on the trackpad
+      Hand (H)     drag to move the view around; H again goes back
+      Arrange      Bring to Front (Shift+Cmd+]), Bring Forward (Cmd+]),
+                   Send Backward (Cmd+[), Send to Back (Shift+Cmd+[): the
+                   front is what is sewn last, so this sets the sewing order
+      Align        line the selected pieces up by their left, centre,
+                   right, top, middle or bottom (one piece: on the whole
+                   design), or distribute three or more evenly
+      Corners      a shape you drew shows a dot in each corner: drag one to
+                   round every corner, click dots to pick corners (shift:
+                   more) and round only those; the Corners panel sets the
+                   radius in mm and Round, Chamfer or Inverted round
+      Pathfinder   select two or more shapes you drew, then Unite, Minus
+                   Front, Intersect or Exclude: one new shape (holes too),
+                   sewn when you click Update Digitizing
+      Turn, bigger, smaller, thread colour, delete; undo (Cmd+Z), redo
+      (Shift+Cmd+Z) and undo all edits. Arrow keys nudge, Delete removes.
+  * Download DST, Preview PNG (the stitches and threads) or Worksheet PDF
+    (the production sheet: totals, threads in needle order, a page per
+    colour). "Choose logo" asks first: save the DST, PDF and PNG together,
+    or discard the work.
+  * A .DST file opens with its stitches and colour blocks; each lettering or
+    shape between trims is a piece to move, resize, turn, recolour or
+    delete, and it saves again as DST, PNG or PDF.
+  * Auto-digitizing suits simple logos and text. Sew one cap before a full
+    run; very small text (under 0.25 in) needs hand digitizing.
 - Close the window to quit.
 
 
@@ -97,4 +149,4 @@ Notes
   October 2026). A thread's screen colour is an approximation: check against
   a physical thread card before production. Personal or internal use.
 - If something goes wrong, the log is in
-  ~/Library/Logs/Vectorizer Local.log
+  ~/Library/Logs/EMB Pros.log

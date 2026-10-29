@@ -50,12 +50,6 @@
 .tag.close { background: #e0f2fe; color: #075985; }
 .tag.mid { background: #fef0c7; color: #93370d; }
 .tag.far { background: #f2f4f7; color: #475467; }
-@media (prefers-color-scheme: dark) {
-  .tag.same { background: #054f31; color: #a6f4c5; }
-  .tag.close { background: #0b3a5a; color: #b9e6fe; }
-  .tag.mid { background: #5a2d0c; color: #fedf89; }
-  .tag.far { background: #2c313b; color: #d0d5dd; }
-}
 .gamut { font-size: 11px; color: var(--muted); }
 .pm-card .actions { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; }
 .pm-card .actions button { font-size: 12px; padding: 3px 8px; }
