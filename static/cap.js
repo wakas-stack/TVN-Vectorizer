@@ -308,8 +308,8 @@ async function digitize() {
     $("#play").hidden = false;
     $("#step").max = C.st.length; $("#step").value = C.st.length;
     stop();
+    showStats();            // first: the details row under the preview takes its room before the preview is sized
     draw();
-    showStats();
   } catch (e) {
     if (id === C.req) toast(e.message, true, 6000);
   } finally { if (id === C.req) { busy(false); setButtons(); } }
@@ -425,9 +425,11 @@ function denseStitches() {
   return denseStitches.c.flags;
 }
 const vary = (i) => 0.94 + 0.12 * ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1;   // the same streaks every time
-function stageRoom() {          // the room the preview has in the stage (css px)
-  const stage = $("#stage").getBoundingClientRect();
-  return [stage.width - 120, stage.height - 96 - $("#play").offsetHeight - $("#design").offsetHeight - 24];
+function stageRoom() {          // the room the preview has in the stage (css px): less the stage's padding and
+  const st = $("#stage"), cs = getComputedStyle(st), r = st.getBoundingClientRect();   // the rows under the preview
+  const below = [$("#design"), $("#play")].reduce((h, el) => el.hidden ? h
+    : h + el.offsetHeight + parseFloat(getComputedStyle(el).marginTop) + parseFloat(getComputedStyle(el).marginBottom), 0);
+  return [r.width - 120, r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - below - 4];
 }
 function fitCanvas(wUnits, hUnits, k) {  // the canvas sized wUnits x hUnits at k css px per unit (fitted to the stage when k is not given)
   const cv = $("#canvas"), [availW, availH] = stageRoom();
