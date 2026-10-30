@@ -130,6 +130,21 @@ def _fill_holes(geom):
     return unary_union([Polygon(p.exterior) for p in _polys(geom)])
 
 
+def _edge_is_transparent(data: bytes) -> bool:
+    """The image's edge is see-through in places (a logo cut out on transparency, as a rounded
+    panel's corners are): then the colour along its edge is part of the logo, not a backdrop."""
+    try:
+        im = Image.open(io.BytesIO(data))
+        if "A" not in im.getbands() and not (im.mode == "P" and "transparency" in im.info):
+            return False
+        a = np.asarray(im.convert("RGBA").getchannel("A"))
+    except Exception:
+        return False
+    edge = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]])
+    clear = edge < 128
+    return 0.002 < clear.mean() < 0.95       # some of it, not all (all clear: no backdrop at all)
+
+
 # ---------------------------------------------------------------------------
 # analysis: trace once, then render many times
 
@@ -141,9 +156,13 @@ class Analysis:
                                 "group_by": "none", "ai_upscale": False}, want_shapes=True)
         self.width, self.height = r["width"], r["height"]
         # background: shapes of the image's border colour that touch the image border or
-        # the outside of the logo (the tracer sometimes leaves strips of background behind)
+        # the outside of the logo (the tracer sometimes leaves strips of background behind).
+        # None when the image's edge is partly transparent: the colour along it (a blue panel
+        # with rounded, see-through corners) is the logo's own, sewn and printed with it
         bg = set(r["background_shapes"])
         bcol = r.get("border_color")
+        if bg and _edge_is_transparent(data):
+            bg, bcol = set(), None
         outside = _fill_holes(unary_union([sh.poly for sh in r["shapes"]])).boundary if r["shapes"] else None
         tol = max(1.5, 0.004 * max(self.width, self.height))
         # a thin band wrapping the outside of the logo (a sticker-style outline) is kept as its
