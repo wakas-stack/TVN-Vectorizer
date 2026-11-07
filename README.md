@@ -259,8 +259,13 @@ threads in sewing order.
   angle, not a turning satin that fans out.
 - A letter with a stroke wider than a cap's satin (5 mm: a bold font sewn large) is one even fill
   over the whole letter, not split satin (a seam down each stem) or pieces at their own angles (a
-  patchwork). The fill travels between its sections along its edge ("travel on edge", as
-  Wilcom's fills), so it needs no trims inside the letter.
+  patchwork). A line of lettering is sewn alike: where one letter is that bold, the line's other
+  letters with strokes of 3 mm or more are fills too (TRU72°: no satin letters beside fill ones).
+  The fill's underlay travels between its sections along its edge ("travel on edge", as Wilcom's
+  fills); its top stitches never do (a run on finished fill shows as a line): a trim instead.
+- A part that is mostly no stroke at all (a banner with words cut out of it) is one fill too, not
+  pieces. A fill's holes stay as drawn (the pull compensation would close up the cut-out words),
+  and travel never steps across one, however short the step.
 - Across colours, from the centre: along a line, where the next part of a colour lies past
   another colour's part (the red o between u and y), that part is sewn there, in its thread (a
   colour change more, as the next block "<id>~n"), so no gap is left between them; only parts

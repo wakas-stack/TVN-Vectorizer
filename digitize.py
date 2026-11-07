@@ -83,6 +83,7 @@ END_CAP = 1.2        # mm: how deep the end caps of a puff column reach in
 SPLIT_MAX = 12.0     # mm: strokes wider than SATIN_MAX, up to this, are split satin (each long
                      # stitch split, the splits staggered, like Wilcom's auto split); wider: fill
 SPLIT_LEN = 4.0      # mm: the longest stitch of a split satin
+BOLD = 3.0           # mm: a letter with strokes this wide, on a line with one too wide for satin, is a fill too
 JUMP_STEP = 63       # 0.1 mm: the longest jump record written, as Wilcom (moves go in equal steps)
 
 
@@ -971,6 +972,7 @@ class Router:
 
     def __init__(self, area):
         self.loose = area.buffer(0.1)
+        shapely.prepare(self.loose)
         x0, y0, x1, y1 = area.bounds if not area.is_empty else (0, 0, 1, 1)
         self.x0, self.y1 = x0 - 1, y1 + 1
         w, h = int((x1 - x0 + 2) / self.RES) + 1, int((y1 - y0 + 2) / self.RES) + 1
@@ -993,6 +995,10 @@ class Router:
     def clear(self, a, b):
         """The straight way from a to b stays inside (its ends may sit on the edge)."""
         d = math.dist(a, b)
+        # never across a hole or a gap, however near the ends (the grid skips them: they sit in
+        # finished stitches): a short step over a word cut out of a banner would bridge a letter
+        if not self.loose.covers(LineString([a, b])):
+            return False
         n = max(2, int(d / (self.RES / 2)))
         h, w = self.mask.shape
         for k in range(n + 1):
@@ -1296,32 +1302,19 @@ def _sew_piece(sw: Sewing, p, kind, o, center_x, start=None, rest=None):
     return "fill"
 
 
-def _sew_part(sw: Sewing, part: Polygon, top: Polygon, o, center_x):
-    """Underlay and top stitches of one part (top: the part widened by the pull compensation)."""
-    w = _width(part)
-    light = o["light"]              # fewer stitches: sparser underlay, longer and sparser fill
-    bottom = (part.centroid.x, part.bounds[1])
-    # the first stitches start just beside the centre seam, not in it (it is a valley on the cap)
+def _plan_part(part: Polygon, top: Polygon, o, center_x):
+    """How a part is sewn: ("ring", None), ("wedges", [(piece, angle)]) or ("pieces", [(piece, kind)]),
+    kind a Stroke (a turning satin), an angle (a straight satin), "ring", or None (neither: fill)."""
     near = _anchor(part, o, center_x)
-
     if _is_ring(top) and _is_ring(part):
-        sw.runs(edge_run(part, near))
-        under = part.buffer(-0.5, join_style=2)
-        if w > 1.6 and isinstance(under, Polygon) and _is_ring(under):
-            sw.runs(ring_satin(under, 2.5 if light else 2.0, center_x))
-        sw.runs(ring_satin(top, o["density"], center_x), top=True)
-        return "satin"
+        return "ring", None
     # strokes: the part cut at its inside corners into columns (a T into its bar and stem), each
     # sewn as a satin that follows it, the pieces one after the other, the nearest next
     plans, pieces = [], []
     sm = _smooth(top)
     wedges = _wedges(sm)
     if wedges:      # a circle with a star in it: wedges, each a satin straight out from the star (Wilcom)
-        done = set()
-        for k, (p, ang) in enumerate(_chain(sw, wedges, near, o["order"])):
-            done.add(id(p))
-            _sew_piece(sw, p, ang, o, center_x, near if k == 0 else None, [q for q, _ in wedges if id(q) not in done])
-        return "satin"
+        return "wedges", wedges
     for p in columns(sm, _stroke_ok):
         p = max(_parts(shapely.make_valid(p)), key=lambda q: q.area)
         # a piece across the centre line (a stripe, a bar) is sewn in two halves, each from the
@@ -1363,9 +1356,64 @@ def _sew_part(sw: Sewing, part: Polygon, top: Polygon, o, center_x):
                     plans.append((p, float(angle)))
                     continue
             plans.append((p, st if st.ok else None))
-    # a letter with a stroke wider than a cap's satin (a bold font, sewn large): one even fill over all
-    # of it. Split satin would show a seam down each stem, and its pieces at their own angles a patchwork
-    wide = any(isinstance(kind, Stroke) and kind.width > SATIN_MAX for _, kind in plans)
+    return "pieces", plans
+
+
+def _boldest(plan):
+    """The widest stroke of a part's pieces, mm (0 when it has none)."""
+    how, plans = plan
+    if how != "pieces":
+        return 0.0
+    # a turning satin's stroke; a short piece at one angle (a serif, a bar end) is a stroke too
+    ws = [k.width if isinstance(k, Stroke) else _stroke(p).width for p, k in plans
+          if k is not None and k != "ring" and (isinstance(k, Stroke) or _stroke(p).ok)]
+    return max(ws, default=0.0)
+
+
+def _fill_shape(part, top):
+    """What a fill covers: top with the part's holes (words cut out of a banner) as drawn, as the
+    pull compensation closing them in would close up the words. Holes too small to sew open
+    stay filled."""
+    holes = [Polygon(h) for h in part.interiors if Polygon(h).area >= HOLE_MIN]
+    return shapely.make_valid(top.difference(unary_union(holes))) if holes else top
+
+
+def _fill_like(plan):
+    """A part to sew as one fill: a stroke wider than a cap's satin (a bold font, sewn large: split
+    satin would show a seam down each stem, its pieces at their own angles a patchwork), or most of
+    it no stroke at all (a banner with words cut out of it)."""
+    how, plans = plan
+    if how != "pieces":
+        return False
+    loose = sum(p.area for p, k in plans if k is None)
+    mixed = any(k is not None for _, k in plans)    # (no stroke at all: a satin at one angle, if one fits)
+    return _boldest(plan) > SATIN_MAX or (mixed and loose >= 0.5 * sum(p.area for p, _ in plans))
+
+
+def _sew_part(sw: Sewing, part: Polygon, top: Polygon, o, center_x, plan=None, fill=False):
+    """Underlay and top stitches of one part (top: the part widened by the pull compensation).
+    plan: from _plan_part; fill: sewn as one fill whatever it is (its line is)."""
+    w = _width(part)
+    light = o["light"]              # fewer stitches: sparser underlay, longer and sparser fill
+    bottom = (part.centroid.x, part.bounds[1])
+    # the first stitches start just beside the centre seam, not in it (it is a valley on the cap)
+    near = _anchor(part, o, center_x)
+    how, plans = plan or _plan_part(part, top, o, center_x)
+    if how == "ring" and not fill:
+        sw.runs(edge_run(part, near))
+        under = part.buffer(-0.5, join_style=2)
+        if w > 1.6 and isinstance(under, Polygon) and _is_ring(under):
+            sw.runs(ring_satin(under, 2.5 if light else 2.0, center_x))
+        sw.runs(ring_satin(top, o["density"], center_x), top=True)
+        return "satin"
+    if how == "wedges" and not fill:
+        done = set()
+        for k, (p, ang) in enumerate(_chain(sw, plans, near, o["order"])):
+            done.add(id(p))
+            _sew_piece(sw, p, ang, o, center_x, near if k == 0 else None, [q for q, _ in plans if id(q) not in done])
+        return "satin"
+    plans = plans if how == "pieces" else []
+    wide = fill or _fill_like((how, plans))
     if not wide and any(kind is not None for _, kind in plans):
         kinds, done = [], set()
         for k, (p, kind) in enumerate(_chain(sw, plans, near, o["order"])):
@@ -1387,23 +1435,26 @@ def _sew_part(sw: Sewing, part: Polygon, top: Polygon, o, center_x):
             for p in _parts(h):
                 sw.runs(satin(p, angle, o["density"], (center_x, p.bounds[1]) if not column else start), top=True)
         return "satin"
-    # fill: vertical stitches, each half swept from the centre line outwards
+    # fill: vertical stitches, each half swept from the centre line outwards, its holes as drawn
+    top = _fill_shape(part, top)
     halves = _halves(top, center_x, o["density"])
     sw.runs(edge_run(part, near))
     under = part.buffer(-0.6, join_style=2)
     density, length = (o["density"] * 1.1, 4.0) if light else (o["density"], FILL_LEN)
-    edge = part.buffer(-EDGE_INSET, join_style=2)       # its edge run's line: travel follows it
+    # the underlay's sections travel along its edge run (under the top stitches still to come); the
+    # top's never do: there the edge is finished fill, and a run on it shows as a line
+    edge = part.buffer(-EDGE_INSET, join_style=2)
     sw.edge = type("Edge", (), {"rings": [r for q in _parts(edge) for r in [q.exterior, *q.interiors]]})()
     try:
         for half in halves:
             for p in _parts(half.intersection(under) if not under.is_empty else half):
                 if p.area > 2:
                     sw.runs(tatami(p, 0.0, 3.0 if light else UNDER_ROW, UNDER_LEN, (center_x, p.bounds[1])))
-        for half in halves:
-            for p in _parts(half):
-                sw.runs(tatami(p, 90.0, density, length, (center_x, p.bounds[1])), top=True)
     finally:
         sw.edge = None
+    for half in halves:
+        for p in _parts(half):
+            sw.runs(tatami(p, 90.0, density, length, (center_x, p.bounds[1])), top=True)
     return "fill"
 
 
@@ -1725,6 +1776,16 @@ def digitize(an, opts: dict):
     # two of this colour's (u, r, then the red o, then y: no gap left to sew later)
     blocks = ([(n, orders[n]) for n in range(len(plan)) if orders[n]]
               if o["order"] != "center" or o.get("arrange") or puffed else _colour_blocks(groups, lines, orders))
+    tops_of = [[_widened(p, o["pull_comp"]) for p in ps] for ps in groups]
+    # how each part is sewn; and a line of lettering is sewn alike: where one letter is too bold for a
+    # satin (a fill), the other bold letters of that line are fills too, not satins beside fills
+    part_plan = {(n, i): _plan_part(p, tops_of[n][i], o, 0.0) for n, ps in enumerate(groups)
+                 if plan[n]["id"] not in puffed for i, p in enumerate(ps)}
+    bold_line = {(n, lines[n][i]) for (n, i), pl in part_plan.items() if _boldest(pl) > SATIN_MAX}
+    as_fill = {k for k, pl in part_plan.items() if (k[0], lines[k[0]][k[1]]) in bold_line and _boldest(pl) >= BOLD}
+    fills = {k for k, pl in part_plan.items() if k in as_fill or _fill_like(pl)}
+    for n, i in fills:      # what a fill covers, so travel keeps out of its holes too
+        tops_of[n][i] = _fill_shape(groups[n][i], tops_of[n][i])
     for b, (n, order) in enumerate(blocks):
         c = plan[n]
         parts = groups[n]
@@ -1739,7 +1800,7 @@ def digitize(an, opts: dict):
             tack = tack_down(whole, 0.0)
             tacked = len(tack)
             sw.runs(tack)
-        tops = [_widened(p, o["pull_comp"]) for p in parts]
+        tops = tops_of[n]
         after = [groups[m][i] for m, ids in blocks[b + 1:] for i in ids]     # sewn later: travel may run under
         later = unary_union(after).buffer(-0.4) if after else Polygon()
         if not again:
@@ -1756,7 +1817,7 @@ def digitize(an, opts: dict):
             sw.router = Router(unary_union([tops[j] for j in left] + [later]).buffer(0.05))
         for k, i in enumerate(flat):
             router(flat[k:] + puffs)
-            kinds[_sew_part(sw, parts[i], tops[i], o, 0.0)] += 1
+            kinds[_sew_part(sw, parts[i], tops[i], o, 0.0, part_plan.get((n, i)), (n, i) in as_fill)] += 1
         if puffs:
             for k, i in enumerate(puffs):       # a centre run holds the cap before the foam goes on
                 router(puffs)
