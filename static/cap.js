@@ -35,6 +35,7 @@ async function analyze() {
 }
 function resetWork() {
   C.edits = {}; C.lock = null; C.sels = []; C.undo = []; C.redo = []; C.applied = {}; C.shapes = []; C.shapeThreads = {}; C.arrange = null;
+  C.sew = {}; C.only = null; C.regions = null; C.locked = []; C.groups = []; if (C.tool === "cts") C.tool = "select";
   C.zoom = 1; C.cam = null;                    // a new file: the whole design in view
   C.st = null; C.colors = []; C.info = null; C.digitized = false; C.dirty = false; C.changed = false; C.pieceThreads = {};
   $("#design").hidden = true; $("#play").hidden = true; $("#stats").innerHTML = ""; $("#notes").innerHTML = "";
@@ -275,11 +276,14 @@ function options() {
     colors: C.plan.map((c) => ({ id: c.id, hex: thread(c)?.hex || c.hex, skip: c.pick < 0 })),
     edits: C.edits, mm_per_px: C.lock,          // the pieces as edited on the page (cap-edit.js)
     shapes: (C.shapes || []).map(shapeToSend),    // drawn on it
+    sew: typeof sewToSend === "function" ? sewToSend() : {},     // each object's own stitch settings (cap-objects.js)
+    only: C.only ?? null,                         // Click to Stitch: the logo's pieces clicked so far
     arrange: C.arrange?.length ? C.arrange.map(sewnKey) : null,     // the sewing order arranged (cap-edit.js)
+    arrange_exact: !!(C.arrange?.length && C.arrangeExact),          // set in the Objects list: kept inside a colour too
   };
 }
 // a shape drawn on the page as the digitizer takes it (image pixels); a Pathfinder shape with its rings
-const shapeToSend = ({ id, hex, px, closed, width, pxRings }) => ({ id, hex, pts: px, closed, width, ...(pxRings ? { rings: pxRings } : {}) });
+const shapeToSend = ({ id, hex, px, closed, width, pxRings, rails }) => ({ id, hex, pts: px, closed, width, ...(pxRings ? { rings: pxRings } : {}), ...(rails ? { rails } : {}) });
 async function request(url, extra = {}) {
   const send = () => post(url, { token: C.token, options: options(), ...extra });
   let r = await send();
@@ -328,13 +332,19 @@ function setButtons() {
   const b = $("#digitizeBtn");
   b.hidden = isDst();
   b.disabled = !C.token || (C.digitized && !C.dirty);
-  b.textContent = C.digitized ? "Update Digitizing" : "Digitize";
+  b.textContent = C.digitized ? "Update Digitizing" : "Auto Digitize";
   b.classList.toggle("pulse", C.dirty);
+  $("#ctsBtn").hidden = isDst(); $("#ctsBtn").disabled = !C.token;
+  $("#ctsBtn").setAttribute("aria-pressed", C.tool === "cts");
+  $("#autoRestBtn").hidden = isDst() || !C.token || C.only === null || C.only === undefined || (!C.digitized && !C.only.length);
   const can = isDst() ? !!C.st : C.digitized;
   $("#saveDst").disabled = $("#savePng").disabled = $("#savePdf").disabled = !can;
   if (typeof updateTools === "function") updateTools();
 }
-$("#digitizeBtn").addEventListener("click", digitize);
+$("#digitizeBtn").addEventListener("click", () => {
+  if (C.only && !C.only.length) C.only = null;     // Click to Stitch with nothing clicked: Auto Digitize all of it
+  digitize();
+});
 
 function showStats() {
   const i = C.info, inch = (v) => (v / MM).toFixed(2);
@@ -427,9 +437,9 @@ function denseStitches() {
 const vary = (i) => 0.94 + 0.12 * ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1;   // the same streaks every time
 function stageRoom() {          // the room the preview has in the stage (css px): less the stage's padding and
   const st = $("#stage"), cs = getComputedStyle(st), r = st.getBoundingClientRect();   // the rows under the preview
-  const below = [$("#design"), $("#play")].reduce((h, el) => el.hidden ? h
+  const below = [$("#design"), $("#play")].reduce((h, el) => el.hidden || !st.contains(el) || getComputedStyle(el).position === "absolute" ? h
     : h + el.offsetHeight + parseFloat(getComputedStyle(el).marginTop) + parseFloat(getComputedStyle(el).marginBottom), 0);
-  return [r.width - 120, r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - below - 4];
+  return [r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8, r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - below - 4];
 }
 function fitCanvas(wUnits, hUnits, k) {  // the canvas sized wUnits x hUnits at k css px per unit (fitted to the stage when k is not given)
   const cv = $("#canvas"), [availW, availH] = stageRoom();
@@ -449,6 +459,8 @@ function drawLogo() {           // before digitizing: the logo as it is
   g.clearRect(0, 0, $("#canvas").width, $("#canvas").height);
   g.drawImage(im, sx, sy, sw, sh, 0, 0, sw * k * dpr, sh * k * dpr);
   C.view = null;
+  C.logoView = { sx, sy, k, dpr };                // Click to Stitch finds the logo's pieces under the pointer
+  if (typeof objOverlay === "function") objOverlay(g);
 }
 function draw() {
   if (!isDst() && !C.digitized) { if (C.img) drawLogo(); return; }
@@ -457,19 +469,20 @@ function draw() {
   const pts = C.st.filter((p) => p[2] <= 1);
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const more = typeof ctsBounds === "function" ? ctsBounds() : null;     // Click to Stitch: the parts not sewn yet in view too
+  if (more) { x0 = Math.min(x0, more[0]); y0 = Math.min(y0, more[1]); x1 = Math.max(x1, more[2]); y1 = Math.max(y1, more[3]); }
   const pad = 40;                                                  // 4 mm around the design
   x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
   // zoomed in (C.zoom > 1, cap-edit.js): the preview fills the stage, centred on C.cam (0.1 mm)
   const [availW, availH] = stageRoom(), fit = Math.max(0.05, Math.min(availW / (x1 - x0), availH / (y1 - y0)));
-  let k, dpr;
-  if ((C.zoom || 1) > 1.001 || C.cam) {         // zoomed in, or moved with the hand: the view fills the stage
-    k = fit * (C.zoom || 1);
-    const cam = C.cam || [(x0 + x1) / 2, (y0 + y1) / 2];
-    C.cam = cam;
-    const wU = availW / k, hU = availH / k;
-    x0 = cam[0] - wU / 2; x1 = cam[0] + wU / 2; y0 = cam[1] - hU / 2; y1 = cam[1] + hU / 2;
-    [k, dpr] = fitCanvas(x1 - x0, y1 - y0, k);
-  } else [k, dpr] = fitCanvas(x1 - x0, y1 - y0);                   // css px per 0.1 mm
+  // the view fills the stage (there is room around the design to draw in), the design fitted in its
+  // middle; zoomed in, or moved with the hand, centred on C.cam
+  let k = fit * (C.zoom || 1), dpr;
+  const cam = C.cam || [(x0 + x1) / 2, (y0 + y1) / 2];
+  if ((C.zoom || 1) > 1.001) C.cam = cam;
+  const wU = availW / k, hU = availH / k;
+  x0 = cam[0] - wU / 2; x1 = cam[0] + wU / 2; y0 = cam[1] - hU / 2; y1 = cam[1] + hU / 2;
+  [k, dpr] = fitCanvas(x1 - x0, y1 - y0, k);                       // css px per 0.1 mm
   C.fit = fit;
   // the stitches are drawn apart, then onto the page with a soft shadow (the design stands off the fabric)
   const art = draw.art || (draw.art = document.createElement("canvas"));
@@ -496,7 +509,9 @@ function draw() {
     prev = c === 2 ? prev : [x, y];
     last = prev;
   }
-  for (const lines of blocks) {
+  if (C.plain) {                 // plain view (Visibility): each stitch a line in its thread
+    for (const lines of blocks) for (const l of lines) line(l, cols[l[4]], Math.max(1, 1.2 * s));
+  } else for (const lines of blocks) {
     if (!lines.length) continue;
     if (C.colors[lines[0][4]]?.stop === "foam") {
       // puff satin piles up into one smooth surface: sheen only, lit by the way each stitch lies
@@ -541,7 +556,8 @@ function draw() {
   out.clearRect(0, 0, cv.width, cv.height);
   out.save();
   // a soft shadow, kept small when zoomed in so it does not thicken fine threads
-  out.shadowColor = "rgba(0,0,0,.35)"; out.shadowBlur = Math.min(3.5 * s, 4 * dpr); out.shadowOffsetX = out.shadowOffsetY = Math.min(2.5 * s, 2 * dpr);
+  if (!C.plain) out.shadowColor = "rgba(0,0,0,.35)";
+  out.shadowBlur = Math.min(3.5 * s, 4 * dpr); out.shadowOffsetX = out.shadowOffsetY = Math.min(2.5 * s, 2 * dpr);
   out.drawImage(art, 0, 0);
   out.restore();
   // kept for editing (cap-edit.js): where the design sits, and the drawing without the selection
@@ -561,7 +577,7 @@ $("#playBtn").addEventListener("click", () => {
   if (C.playing) return stop();
   if (+$("#step").value >= C.st.length) $("#step").value = 0;
   C.playing = true; $("#playBtn").textContent = "❚❚";
-  const per = Math.max(1, Math.ceil(C.st.length / 360));
+  const per = Math.max(1, Math.ceil(C.st.length / 360 * (C.speed || 1)));      // about 6 seconds at 1x
   const tick = () => {
     if (!C.playing) return;
     const v = Math.min(C.st.length, +$("#step").value + per);

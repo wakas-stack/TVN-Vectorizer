@@ -128,6 +128,13 @@ function pending(key) {
   const a = { ...ID, ...(C.applied[key] || {}) }, b = { ...ID, ...(C.edits[key] || {}) };
   const mine = (C.info?.pieces || []).filter((p) => p.key === key);
   const rings = mine.map((p) => p.pts), holes = mine.flatMap((p) => p.holes || []);
+  if (b.rings && JSON.stringify(b.rings) !== JSON.stringify(a.rings || null) && C.info?.frame) {
+    // its outline set on the page (reshaped, cut, a copy: cap-objects.js), in image pixels, moved since
+    if (b.deleted) return { rings: [], holes: [], old: rings, changed: true, deleted: true };
+    const f = linAbout(centroid(b.rings), mOf(b), [b.dx || 0, b.dy || 0]);
+    return { rings: b.rings.map((r) => r.map((q) => fromPxFrame(f(q)))), holes: [], old: rings, changed: true,
+             colour: b.color && b.color !== a.color ? b.color : null };
+  }
   if (!rings.length || a.deleted) return { rings: [], holes: [], old: rings, changed: false };
   if (b.deleted) return { rings: [], holes: [], old: rings, changed: true, deleted: true };
   const ma = mOf(a), mb = mOf(b);
@@ -144,7 +151,9 @@ function pending(key) {
 }
 function allPieces() {          // every piece there is now: logo keys, or DST piece numbers
   if (isDst()) return segments().map((_g, k) => k);
-  return [...new Set((C.info?.pieces || []).map((p) => p.key))].filter((k) => pending(k).rings.length && !redrawnShape(k))
+  const known = new Set((C.info?.pieces || []).map((p) => p.key));
+  const made = Object.keys(C.edits || {}).filter((k) => /:x\d+$/.test(k) && !known.has(k) && !C.edits[k].deleted);    // a copy, a piece cut off: not sewn yet
+  return [...known, ...made].filter((k) => pending(k).rings.length && !redrawnShape(k))
     .concat(C.shapes.filter((sh) => !sh.sewn).map((sh) => "draft:" + sh.id));
 }
 // a shape drawn on a logo, not digitized yet: a piece of its own ("draft:<id>"), edited as drawn
@@ -169,7 +178,7 @@ function pieceAt(pt) {
       const d = (p[0] - pt[0]) ** 2 + (p[1] - pt[1]) ** 2; if (d < bd) { bd = d; best = k; } } });
     return best;
   }
-  for (const key of allPieces().reverse()) {   // the last drawn is on top; in a shape's hole is outside it
+  for (const key of allPieces().filter((k) => !(typeof isLocked === "function" && isLocked(k))).reverse()) {   // the last drawn is on top; in a shape's hole is outside it; a locked object is left alone
     const rs = ringsOf(key);
     if (draftOf(key)?.rings ? rs.filter((r) => inPoly(pt, r)).length % 2 === 1 : rs.some((r) => inPoly(pt, r))) return key;
   }
@@ -200,7 +209,9 @@ function editOverlay(g) {
       }
       const hex = pd.colour || (C.info.pieces.find((p) => p.key === key)?.hex) || "#888888";
       g.fillStyle = hex; g.globalAlpha = 0.85;
-      for (const r of pd.rings) { path(r); g.fill(); }
+      g.beginPath();
+      for (const r of pd.rings) { r.forEach((p, i) => { const [x, y] = toScreen(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); }
+      g.fill("evenodd");
       g.globalAlpha = 1; g.setLineDash([4 * dpr, 3 * dpr]); g.strokeStyle = "rgba(10,132,255,.8)"; g.lineWidth = 1 * dpr;
       for (const r of pd.rings) { path(r); g.stroke(); }
       g.setLineDash([]);
@@ -250,8 +261,9 @@ function editOverlay(g) {
     g.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
     g.restore();
   }
+  if (typeof objOverlay === "function") objOverlay(g);     // objects: start points, angles, reshape, Click to Stitch
   const rings = selOutlines();
-  if (!rings.length) return;
+  if (!rings.length || C.tool === "reshape") return;
   const moved = rings.map((r) => r.map(dragged));
   g.save();
   g.lineWidth = 1.5 * dpr; g.strokeStyle = "#0a84ff"; g.setLineDash([5 * dpr, 4 * dpr]);
@@ -303,13 +315,16 @@ const HANDLE_CURSOR = { "-1,1": "nwse-resize", "1,-1": "nwse-resize", "1,1": "ne
                         "0,1": "ns-resize", "0,-1": "ns-resize", "-1,0": "ew-resize", "1,0": "ew-resize" };
 
 // ---------------------------------------------------------------- edits, undo, redo
-const snapshot = () => JSON.stringify(isDst() ? { st: C.st, colors: C.colors } : { edits: C.edits, lock: C.lock, shapes: C.shapes, arrange: C.arrange });
+const snapshot = () => JSON.stringify(isDst() ? { st: C.st, colors: C.colors } : { edits: C.edits, lock: C.lock, shapes: C.shapes, arrange: C.arrange,
+                                                                                  sew: C.sew, only: C.only, locked: C.locked, groups: C.groups, exact: C.arrangeExact });
 function remember() { C.undo.push(snapshot()); C.redo = []; }
 function restore(json) {
   const o = JSON.parse(json);
   C.sels = [];
   if (isDst()) { C.st = o.st; C.colors = o.colors; C.changed = true; afterDst(); return; }
-  C.edits = o.edits; C.lock = o.lock; C.shapes = o.shapes || []; C.arrange = o.arrange || null; markDirty();
+  C.edits = o.edits; C.lock = o.lock; C.shapes = o.shapes || []; C.arrange = o.arrange || null;
+  C.sew = o.sew || {}; C.only = o.only === undefined ? null : o.only; C.locked = o.locked || []; C.groups = o.groups || []; C.arrangeExact = !!o.exact;
+  markDirty();
 }
 function undo() { if (!C.undo.length) return; C.redo.push(snapshot()); restore(C.undo.pop()); }
 function redo() { if (!C.redo.length) return; C.undo.push(snapshot()); restore(C.redo.pop()); }
@@ -348,6 +363,7 @@ function transform(v, f, a, at, undoTaken) {
     const view = sh.view.map(map), rings = sh.rings?.map((r) => r.map(map));
     const out = { ...sh, view, px: view.map(toPxFrame), width_mm: sh.width_mm * fw, width: sh.width_mm * fw / C.lock,
                   ...(rings ? { rings, pxRings: rings.map((r) => r.map(toPxFrame)) } : {}),
+                  ...(sh.railsView ? { railsView: sh.railsView.map((pr) => pr.map(map)), rails: sh.railsView.map((pr) => pr.map(map).map(toPxFrame)) } : {}),
                   ...(sh.text ? { text: { ...sh.text, height_mm: Math.round(sh.text.height_mm * fy * 10) / 10 } } : {}) };
     if (sh.corner) setCorners(out, sh.corner.base.map(fromPxFrame).map(map).map(toPxFrame), sh.corner.r.map((x) => x * fw), sh.corner.style);
     return out;
@@ -390,7 +406,7 @@ function arrangePieces(how) {
   remember();
   const word = { front: "Brought to the front", forward: "Brought forward", backward: "Sent backward", back: "Sent to the back" }[how];
   if (isDst()) { arrangeDst(out); toast(`${word}: the stitches are sewn in the new order.`); return; }
-  C.arrange = out.map(sewnKey);
+  C.arrange = out.map(sewnKey); C.arrangeExact = false;     // as Arrange always has: colour blocks, each colour's own order inside
   markDirty();
   toast(`${word}: sewn in the new order when you click Update Digitizing (a colour split in two adds a colour change).`);
 }
@@ -650,13 +666,14 @@ function recolourPieces(ks, t) {
 }
 function resetEdits() {
   if (isDst()) { if (C.undo.length) { const first = C.undo[0]; C.redo = []; C.undo = []; restore(first); } return; }
-  if (!Object.keys(C.edits).length && !C.shapes.length) return;
-  remember(); C.edits = {}; C.lock = null; C.sels = []; C.shapes = []; C.arrange = null; markDirty();
+  if (!Object.keys(C.edits).length && !C.shapes.length && !Object.keys(C.sew || {}).length) return;
+  remember(); C.edits = {}; C.lock = null; C.sels = []; C.shapes = []; C.arrange = null; C.sew = {}; C.locked = []; C.groups = []; markDirty();
 }
 
 // ---------------------------------------------------------------- the pointer
 const cv = $("#canvas");
 cv.addEventListener("pointerdown", (ev) => {
+  if (typeof objPointer === "function" && objPointer(ev, "down")) return;      // Click to Stitch and the object tools
   if (!C.view || !C.st) return;
   if (C.tool === "zoom") {      // click: zoom in (option: out); drag: move around
     E.drag = { mode: "zoom", sx: ev.clientX, sy: ev.clientY, cam: C.cam, pt: toDesign(ev), out: ev.altKey, moved: false };
@@ -689,12 +706,13 @@ cv.addEventListener("pointerdown", (ev) => {
       repaint();
       return;
     }
+    const g = typeof groupOf === "function" ? groupOf(k) : [k];      // a group is selected whole
     if (ev.shiftKey) {          // shift: add the piece, or take it away
-      C.sels = C.sels.includes(k) ? C.sels.filter((x) => x !== k) : [...C.sels, k];
+      C.sels = C.sels.includes(k) ? C.sels.filter((x) => !g.includes(x)) : [...new Set([...C.sels, ...g])];
       repaint();
       return;
     }
-    if (!C.sels.includes(k)) C.sels = [k];
+    if (!C.sels.includes(k)) C.sels = g;
     mode = "move";
   }
   E.drag = { mode, start: pt, cur: pt, c: centroid(selOutlines()), fx: 1, fy: 1, a: 0 };
@@ -706,6 +724,7 @@ cv.addEventListener("pointerdown", (ev) => {
   repaint();
 });
 cv.addEventListener("pointermove", (ev) => {
+  if (typeof objPointer === "function" && objPointer(ev, "move")) return;
   if (!C.view || !C.st) return;
   if (C.tool === "zoom") {
     cv.style.cursor = E.drag ? "grabbing" : ev.altKey ? "zoom-out" : "zoom-in";
@@ -748,7 +767,7 @@ cv.addEventListener("pointermove", (ev) => {
   if (d.mode === "box") {       // every piece whose middle is inside the box
     const [x0, x1] = [Math.min(d.start[0], d.cur[0]), Math.max(d.start[0], d.cur[0])];
     const [y0, y1] = [Math.min(d.start[1], d.cur[1]), Math.max(d.start[1], d.cur[1])];
-    const inside = allPieces().filter((k) => { const [a, b, c, e] = bbox(ringsOf(k)); const mx = (a + c) / 2, my = (b + e) / 2; return mx >= x0 && mx <= x1 && my >= y0 && my <= y1; });
+    const inside = allPieces().filter((k) => !(typeof isLocked === "function" && isLocked(k))).filter((k) => { const [a, b, c, e] = bbox(ringsOf(k)); const mx = (a + c) / 2, my = (b + e) / 2; return mx >= x0 && mx <= x1 && my >= y0 && my <= y1; });
     C.sels = [...new Set([...d.keep, ...inside])];
     repaint();
     return;
@@ -771,7 +790,8 @@ cv.addEventListener("pointermove", (ev) => {
   }
   repaint();
 });
-function endDrag() {
+function endDrag(ev) {
+  if (typeof objPointer === "function" && objPointer(ev, "up")) return;
   if (C.tool === "hand") { E.drag = null; $("#canvas").style.cursor = "grab"; return; }
   if (C.tool === "pen") { E.drag = null; return; }
   if (C.tool === "zoom") {
@@ -808,7 +828,7 @@ document.addEventListener("keydown", (ev) => {
   if (mod && ev.key.toLowerCase() === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
   if (mod && ev.key.toLowerCase() === "y") { ev.preventDefault(); redo(); return; }
   if (C.tool === "pen" && E.pen) {             // the pen: Enter finishes a line, Backspace takes the last point back
-    if (ev.key === "Enter") { ev.preventDefault(); penFinish(false); return; }
+    if (ev.key === "Enter") { ev.preventDefault(); penFinish(C.penMode === "closed"); return; }
     if (ev.key === "Escape") { ev.preventDefault(); E.pen = null; repaint(); return; }
     if (ev.key === "Backspace" || ev.key === "Delete") { ev.preventDefault(); E.pen.pts.pop(); if (!E.pen.pts.length) E.pen = null; repaint(); return; }
   }
@@ -836,6 +856,7 @@ const tools = {
 };
 for (const [id, fn] of Object.entries(tools)) $("#" + id).addEventListener("click", fn);
 function updateTools() {
+  if (typeof objPanelSync === "function") objPanelSync();
   $("#tools").hidden = !(C.st && (isDst() || C.digitized));
   for (const id of ["toolTurnL", "toolTurnR", "toolBigger", "toolSmaller", "toolColour", "toolDelete"]) $("#" + id).disabled = !hasSel();
   $("#toolUndo").disabled = !C.undo.length; $("#toolRedo").disabled = !C.redo.length;
@@ -859,6 +880,7 @@ function updateTools() {
   $("#toolZoomOut").disabled = !(C.zoom > 1.001);
   $("#toolFit").disabled = !(C.zoom > 1.001 || C.cam);       // also after the hand moved the view
   $("#toolFit").title = `Fit: the whole design in view (now ${Math.round((C.zoom || 1) * 100)}%)`;
+  if (typeof toolsSync === "function") toolsSync();      // the editor's frame (cap-tools.js)
 }
 
 // ---------------------------------------------------------------- shapes and the pen
@@ -995,6 +1017,7 @@ async function addShape(d) {     // d: {path, closed, width_mm}, or text: {rings
   C.shapes = [...C.shapes, { id, hex: t.hex.toLowerCase(), ...shape, closed,
                              width: (d.width_mm || 1.5) / C.lock, width_mm: d.width_mm || 1.5, sewn: false }];
   C.sels = ["draft:" + id];                     // selected, to move, resize, turn, recolour or delete
+  if (typeof newObjectCfg === "function" && !d.rings) newObjectCfg(id, closed);      // the settings in the box (cap-tools.js)
   setTool("select");
   markDirty();
   toast(`${d.rings ? "Text" : closed ? "Shape" : "Line"} added and selected. Click Update Digitizing to sew it.`);
@@ -1330,7 +1353,10 @@ $("#drawClose").addEventListener("click", () => ($("#drawMenu").hidden = true));
 $("#drawThread").addEventListener("click", (ev) => openPalette(ev.currentTarget, (t) => { C.drawThread = t; openDrawMenu(); }));
 $("#penThread").addEventListener("click", (ev) => openPalette(ev.currentTarget, (t) => { C.drawThread = t; showThread($("#penMenu")); repaint(); }));
 $("#penClose").addEventListener("click", () => ($("#penMenu").hidden = true));
-cv.addEventListener("dblclick", () => { if (C.tool === "pen" && E.pen) penFinish(false); });
+cv.addEventListener("dblclick", () => {         // a double-click: that point is a curved one
+  const last = C.tool === "pen" && E.pen?.pts[E.pen.pts.length - 1];
+  if (last) { last.smooth = true; repaint(); }
+});
 
 // ---------------------------------------------------------------- the pen: a path point by point
 // Click to place a point (a corner); drag as you place it to pull its handles (a smooth curve). Click
@@ -1355,7 +1381,13 @@ function penNearFirst(ev) {
   return Math.hypot((ev.clientX - r.left) * d - x, (ev.clientY - r.top) * d - y) <= 9 * d;
 }
 function penDown(ev) {
-  const pt = toDesign(ev);
+  const pt = typeof snapPt === "function" ? snapPt(toDesign(ev)) : toDesign(ev);
+  if (ev.button === 2) {          // a right-click: a curved point, the line running smoothly through it
+    if (!E.pen) E.pen = { pts: [], cursor: pt };
+    E.pen.pts.push({ p: pt, h: [0, 0], smooth: true });
+    repaint();
+    return;
+  }
   if (ev.altKey && E.pen) {     // option on a point: its handles taken away (the last one: the one going on)
     const i = penPointAt(ev);
     if (i >= 0) {
@@ -1388,6 +1420,12 @@ function penMove(ev) {
 }
 // the path as points (0.1 mm): each curve between two points cut into short straight steps
 function penFlatten(pts, closed) {
+  pts = pts.map((q, i) => {        // a curved point: handles along the line from the point before to the one after
+    if (!q.smooth || Math.hypot(...q.h) > 1) return q;
+    const n = pts.length, a = pts[closed ? (i - 1 + n) % n : Math.max(0, i - 1)].p, b = pts[closed ? (i + 1) % n : Math.min(n - 1, i + 1)].p;
+    const h = [(b[0] - a[0]) / 6, (b[1] - a[1]) / 6];
+    return { ...q, h, hin: [-h[0], -h[1]] };
+  });
   const out = [pts[0].p];
   const segs = pts.length - 1 + (closed ? 1 : 0);
   for (let i = 0; i < segs; i++) {

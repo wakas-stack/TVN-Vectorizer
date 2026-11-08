@@ -409,7 +409,11 @@ def cap_shape():
     body = request.get_json(force=True)
     try:
         pts = [(float(x) / 10, float(y) / 10) for x, y in body.get("pts") or []]
-        if body.get("rings"):           # text: its outlines, a ring inside another a hole
+        rails = None
+        if body.get("rails"):           # a satin block: its point pairs, sewn rail to rail
+            rails = [((float(a[0]) / 10, float(a[1]) / 10), (float(b[0]) / 10, float(b[1]) / 10)) for a, b in body["rails"]]
+            geom = shapely.make_valid(Polygon([a for a, _b in rails] + [b for _a, b in rails][::-1]))
+        elif body.get("rings"):           # text: its outlines, a ring inside another a hole
             geom = Polygon()
             for r in body["rings"]:
                 if len(r) >= 3:
@@ -419,7 +423,7 @@ def cap_shape():
         else:
             geom = Polygon(pts) if body.get("closed") and len(pts) >= 3 else \
                 LineString(pts).buffer(max(float(body.get("width_mm") or 1.5), 0.5) / 2, cap_style=1, join_style=1)
-        st = digitize.sew_shape(geom, body.get("options") or {})
+        st = digitize.sew_shape(geom, body.get("options") or {}, rails)
     except ValueError as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
@@ -442,6 +446,43 @@ def cap_text():
     except Exception as e:
         logging.exception("request failed")
         return jsonify(error=f"Could not set the text: {e}"), 500
+
+
+@app.post("/api/cap/regions")
+def cap_regions():
+    """Click to Stitch: the logo's pieces (each separate shape of a colour) in image pixels."""
+    body = request.get_json(force=True)
+    an = _patches.get(body.get("token", ""))
+    if not an:
+        return jsonify(error="expired"), 404
+    with _patch_lock:
+        return jsonify(regions=digitize.regions_px(an))
+
+
+@app.post("/api/cap/knife")
+def cap_knife():
+    """A shape (rings in image pixels) cut along a line: the pieces' rings."""
+    body = request.get_json(force=True)
+    try:
+        return jsonify(pieces=digitize.knife(body.get("rings") or [], body.get("line") or []))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:
+        logging.exception("request failed")
+        return jsonify(error=f"Could not cut the shape: {e}"), 500
+
+
+@app.post("/api/cap/hole")
+def cap_hole():
+    """A shape (rings in image pixels) with a hole cut out of it: its rings."""
+    body = request.get_json(force=True)
+    try:
+        return jsonify(rings=digitize.cut_hole(body.get("rings") or [], body.get("hole") or []))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:
+        logging.exception("request failed")
+        return jsonify(error=f"Could not cut the hole: {e}"), 500
 
 
 @app.post("/api/cap/pathfinder")
