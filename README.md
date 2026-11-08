@@ -232,10 +232,31 @@ threads in sewing order.
     stitches across stems and legs, up-and-down on bars;
   - strokes wider than 5 mm (up to 12 mm) as split satin: each stitch split into pieces of
     4 mm or less, the splits staggered (like Wilcom's auto split);
-  - rings (a border, an O) round the ring; anything else tatami fill (vertical, 3.5 mm).
+  - rings (a border, an O) round the ring; anything else tatami fill: rows at 15°, 4 mm stitches,
+    underlay at 105°, and a satin border 1.4 mm wide round it, sewn last over the fill's edge and
+    fanned round inside corners (a part under 4.5 mm wide has none). A fill with words cut out of
+    it keeps upright rows and has no border round its narrow cut-outs (the fill runs up to them).
+    From Wilcom's WTS Logo file (3.00 x 2.60 in, 10,903 stitches, 18 trims; 7 Nov 2026).
   Underlay: a centre run there and back on narrow strokes, an edge walk up one side and down
   the other on wide ones (plus a zigzag over 5 mm), as in a Wilcom file. A stroke across the
   centre line is sewn in two halves from the centre out. Pull compensation (0.2 mm).
+- Fewer trims (Wilcom's WTS file joins a line's letters): moving on to the next part, a step of up
+  to 2.5 mm across bare fabric to its nearest edge is sewn (then inside it to where it starts), not
+  trimmed; inside one part travel may run over its own finished stitches up to 8 mm; a bordered
+  fill's sections travel in the band its border covers. Sewing from the bottom goes line by line, each line's colours in turn (a colour change
+  where the colour changes): Wilcom's WTS file sews the taglines, then Los Angeles and the arrow,
+  then WTS, then the orange flag on the W.
+- Small lettering (a part under 16 mm with strokes under 2 mm, in a line of three or more of a colour
+  about one height) is sewn as lettering is digitized: the letter is drawn on a 0.04 mm grid and worn
+  down to its middle lines (`letter_columns`); where they meet, the two that carry on each other most
+  straightly are one stroke (an e's bowl into its tail, an n's stem into its arch; a tiny link
+  between two close junctions folded into one), and it is cut where a line turns into a corner
+  (an L, an arrow's tip: the legs run on straight into the corner) and where its stitches would
+  cross; each line is a satin column as wide as the letter is there (its width eased along it), with
+  the full pull compensation and at least 1.2 mm wide (Wilcom's WTS taglines: 1.2-1.3 mm satins),
+  a centre run out and the satin back over it; on the inside of a tight bend the stitches are
+  shortened (and every other one shorter still), so they neither cross nor pile into one hole. A letter whose columns would not cover at least 90%
+  of it, or would spill past it (a rough or grunge font), keeps the parts' own sewing.
 - Studied against a Wilcom EmbroideryStudio cap file (Beth logo, 2.02 x 1.44 in: 2,421
   stitches, 8 trims, turning satin with centre-run and edge-walk underlay): traced from its
   preview, this gives 2,123 stitches and 15 trims, the swoosh as one turning satin.
@@ -300,7 +321,7 @@ threads in sewing order.
 - Satin with no bare wedges: where a satin's stitches turn sharply (round a tight bend, or where an
   end's angle is held), stitches are added that walk the edge with the gap, fanning round the turn
   as Wilcom's short stitches do.
-- Workflow: a logo opened is shown as it is; **Digitize** makes the stitches. After that every change
+- Workflow: a logo opened is shown as it is; **Auto Digitize** makes the stitches (or **Click to Stitch**, part by part). After that every change
   (a setting, a thread, an edit on the design) waits: the button turns to **Update Digitizing**,
   and the logo is digitized again when it is clicked (or before a file is saved). A piece's
   pending edit shows on the design (where it will be, in its new thread) until then.
@@ -347,6 +368,49 @@ threads in sewing order.
   and the corner: Round, Chamfer or Inverted round. The sharp outline is kept with the shape, so the
   corners can be changed again at any time; a shape already sewn becomes a drawn shape again (where
   it was moved to) and is sewn with its new corners on Update Digitizing.
+- The editor (`static/cap-tools.js`), laid out as an embroidery editor: the design fills the middle;
+  the tools run along the bottom: Select (S), Pan (space held, or H), Measure (M: drag across to read
+  the distance in mm and inches), Open shape (1) and Closed shape (2) (click: a straight point;
+  right-click or double-click: a curved point; Enter finishes), Satin blocks (3: a point on one side
+  of the column, then its partner on the other, on along the column; Enter; sewn rail to rail,
+  `digitize.rail_satin`), Pen (4, freehand: let go near the start for a filled shape), Circle (5),
+  Rectangle (6), more shapes, Text (T), Click to Stitch (7), Auto Digitize (8), the stitch player
+  (play, speed 0.5x to 8x, arrows step a stitch) and Realistic view (V; off: plain stitch lines),
+  Zoom (Z). Top left the file; top right digitizing and the files; zoom and undo bottom left; a box
+  of settings floats top left (the selection's, or what is drawn or clicked next: an open line is a
+  run unless it says otherwise, a satin block a satin); the selection's tools in a bar over it. On
+  the right a rail of tabs: Objects (the sewing order), Lettering, Threads, Cap (size, embroidery,
+  stitches), Visibility (realistic view, jumps, trims, tie-ins and tie-offs, needle points, a 10 mm
+  grid, snap to 1 mm) and Info (totals, notes, design information). The canvas fills the stage, so
+  shapes can be drawn anywhere around the design.
+- Objects (`static/cap-objects.js`), as a digitizing program has them: after Auto Digitize every
+  piece of the logo (a letter, a star: each separate shape of a colour) and every shape drawn is an
+  object. Select one (on the design, in the list, or Tab / ⇧Tab through the sewing order) and the
+  **Selected object** panel sets how it is sewn: Auto (as the digitizer chooses), Satin (no fill;
+  at a stitch angle when one is set, else following the shape; long stitches split), Fill (tatami at
+  the stitch angle, 90° upright by default, its holes kept open) or Run (a line round its outline,
+  single or triple); row spacing, stitch length, pull compensation, underlay on or off, tie in, tie
+  off and trim after. Several selected take the settings together. Sewn on Update Digitizing
+  (`digitize._sew_object`); an object left on Auto sews exactly as before.
+  - Object tools: Reshape (R: drag a point, click an edge to add one, select a point and press
+    Delete to remove it, arrows nudge it; Enter keeps it, Esc drops it), Cut hole (draw round the
+    hole), Knife (K: a line right across it makes two objects), Start point (E: where its sewing
+    begins), Stitch angle (A: drag a line the way the stitches lie; it becomes a fill unless it is a
+    satin), Duplicate (⌘D, 2 mm along), Flip horizontal and vertical, Group (⌘G: a click selects them
+    all) and Ungroup (⇧⌘G), Lock (⌘L: it cannot be selected or moved on the design; unlock it in the
+    list). A logo piece reshaped, cut or copied keeps its colour and its place in the sewing: its
+    outline is kept with its edit (`rings`, image pixels), a new piece as `<colour>:x<n>`
+    (`/api/cap/knife`, `/api/cap/hole`). Pieces of a colour that touch or overlap (cut, copied, moved
+    onto another) are sewn as objects of their own, not joined into one.
+  - **Objects, in sewing order**: every object with its type and stitches; drag one to sew it
+    earlier or later (kept inside a colour too; Arrange still orders colour blocks only), click to select,
+    the lock to lock or unlock; "By colour" groups them by thread (click a colour to select all of it).
+- Click to Stitch (7, next to Auto Digitize): the logo's pieces are found (`/api/cap/regions`);
+  point at one to see it, click to sew it (or drag a box over several) with the settings in the
+  panel (Auto, Satin, Fill or Run and their settings), digitized after each click. Only the pieces
+  clicked are sewn, sized and placed as in the whole logo; the rest show faintly until clicked.
+  **Auto Digitize the rest** (8) sews what is left; a piece clicked again takes the settings now
+  in the panel. Esc ends it.
 - Text (tool strip, T): type lettering (Return for more lines), pick a font, the capital letters'
   height in mm (as Wilcom sizes lettering), letter spacing, line alignment and the thread, and Add
   text: it goes in the middle of the view, selected, to move, resize, turn or recolour like a shape,

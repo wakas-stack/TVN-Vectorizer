@@ -126,3 +126,123 @@ body:not(.dst-mode) .dst-only { display: none !important; }
 .cp-text-preview { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: #1d1d1b;
   font-size: 26px; line-height: 1.25; white-space: pre-wrap; overflow: hidden; max-height: 92px; text-align: center; }
 .cp-text #textAdd { height: 34px; }
+
+/* objects (cap-objects.js): the Object panel and the Objects list */
+.cp-obj-actions { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 4px 0 8px; }
+.cp-obj-actions[hidden] { display: none; }
+.cp-obj-actions button { height: 32px; padding: 0; display: grid; place-items: center; border-radius: 7px; color: var(--ink); }
+.cp-obj-actions button[aria-pressed="true"], #ctsBtn[aria-pressed="true"] { background: color-mix(in srgb, #0a84ff 14%, transparent); color: #0a84ff; border-color: color-mix(in srgb, #0a84ff 40%, transparent); }
+.cp-obj-actions button:disabled { opacity: .35; }
+.cp-seg { display: flex; gap: 0; margin: 4px 0 8px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.cp-seg button { flex: 1; border: 0; border-radius: 0; padding: 6px 4px; font-size: 12.5px; background: transparent; color: var(--ink); }
+.cp-seg button + button { border-left: 1px solid var(--line); }
+.cp-seg button[aria-pressed="true"] { background: color-mix(in srgb, #0a84ff 14%, transparent); color: #0a84ff; font-weight: 600; }
+.cp-seg.small button { padding: 4px; font-size: 12px; }
+#objBody [hidden], #seqPanel[hidden] { display: none; }
+.cp-num { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.cp-num input { width: 84px; }
+.cp-ties { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; }
+#objReset { margin-top: 6px; width: 100%; }
+.cp-seq { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow: auto; }
+.cp-seq li { display: grid; grid-template-columns: 22px 16px 1fr auto 22px; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 6px;
+  font-size: 12.5px; cursor: pointer; border: 1px solid transparent; }
+.cp-seq li:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.cp-seq li.sel { background: color-mix(in srgb, #0a84ff 12%, transparent); border-color: color-mix(in srgb, #0a84ff 35%, transparent); }
+.cp-seq li.locked .nm { color: var(--muted); }
+.cp-seq li.head { grid-template-columns: 16px 1fr auto; font-weight: 600; margin-top: 4px; }
+.cp-seq li.drop-above { box-shadow: inset 0 2px 0 #0a84ff; }
+.cp-seq li.drop-below { box-shadow: inset 0 -2px 0 #0a84ff; }
+.cp-seq .n { color: var(--muted); font-size: 11px; text-align: right; }
+.cp-seq .sw { width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .15); }
+.cp-seq .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-seq .ct { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.cp-seq .lk { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); opacity: .45; }
+.cp-seq li:hover .lk, .cp-seq .lk[aria-pressed="true"] { opacity: 1; }
+.cp-seq .lk[aria-pressed="true"] { color: #ff9500; }
+
+/* ================================================================ the editor layout (cap-objects.js)
+   the design in the middle; along the bottom the tools; top left the file, top right digitizing and
+   the files; a box of settings for what is selected or drawn floats top left, its tools in a bar over
+   the selection; zoom and undo bottom left; on the right a rail of tabs and their panel */
+.cpx { display: grid; grid-template-columns: minmax(0, 1fr) 52px 320px; height: calc(100% - 64px); }
+.cpx-stage { padding: 64px 16px 78px; }
+.cpx-stage > .pt-drop { align-self: center; }
+.cpx-file { position: absolute; top: 12px; left: 12px; z-index: 4; display: flex; align-items: center; gap: 8px; max-width: 34%;
+  padding: 4px 10px 4px 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px rgb(0 0 0 / .06); }
+.cpx-file button { height: 32px; padding: 0 12px; font-size: 13px; }
+.cpx-file .file-info { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cpx-file .file-info:empty { display: none; }
+.cpx-top { position: absolute; top: 12px; right: 12px; z-index: 4; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 64%; }
+.cpx-top button { height: 34px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+.cpx-top button.primary { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+.cpx-top .cpx-gap { width: 6px; }
+.cpx-top button[hidden] { display: none; }
+
+/* the tools, along the bottom */
+.cpx-tools { left: 50%; top: auto; bottom: 14px; transform: translateX(-50%); flex-direction: row; align-items: center; gap: 2px; padding: 5px; border-radius: 12px; }
+.cpx-tools button { position: relative; width: 38px; height: 38px; }
+.cpx-tools button kbd { position: absolute; right: 2px; bottom: 1px; font: 600 8.5px/1 -apple-system, sans-serif; color: var(--muted); pointer-events: none; }
+.cpx-tools button[aria-pressed="true"] kbd { color: #0a84ff; }
+.cpx-tools .sep { width: 1px; height: 24px; margin: 0 4px; }
+/* zoom and undo, bottom left */
+.cpx-zoom { position: absolute; left: 12px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px rgb(0 0 0 / .06); }
+.cpx-zoom[hidden] { display: none; }
+.cpx-zoom button { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border-radius: 7px; border: 0; background: transparent; color: var(--ink); }
+.cpx-zoom button:disabled { opacity: .35; }
+.cpx-zoom .sep { width: 1px; height: 22px; margin: 0 4px; background: var(--line); }
+.cpx-zoom-n { min-width: 44px; text-align: center; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* the stitch player: over the tools while it is on */
+.cpx-stage .cp-play { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 3; margin: 0; width: min(620px, calc(100% - 32px));
+  padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 2px 10px rgb(0 0 0 / .08); }
+body:not(.cpx-player) .cpx-stage .cp-play { display: none; }
+#speedBtn { width: auto; min-width: 40px; border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* the settings box: what is selected, or what is drawn next */
+.cpx-settings { position: absolute; left: 12px; top: 60px; z-index: 4; width: 260px; max-height: calc(100% - 150px); overflow: auto;
+  padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / .10); font-size: 13px; }
+.cpx-settings[hidden] { display: none; }
+.cpx-settings-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.cpx-settings .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; }
+.cpx-settings .lbl { color: var(--muted); }
+.cpx-settings .hint { margin: 6px 0 0; }
+/* the bar over the selection */
+.cpx-selbar { position: absolute; z-index: 5; display: flex; align-items: center; gap: 1px; padding: 4px; max-width: calc(100% - 24px); flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgb(0 0 0 / .14); }
+.cpx-selbar[hidden] { display: none; }
+.cpx-selbar-row { display: contents; }
+.cpx-selbar button { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border-radius: 7px; border: 0; background: transparent; color: var(--ink); }
+.cpx-selbar button svg { width: 18px; height: 18px; }
+.cpx-selbar button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.cpx-selbar button:disabled { opacity: .3; }
+.cpx-selbar button[aria-pressed="true"] { background: color-mix(in srgb, #0a84ff 14%, transparent); color: #0a84ff; }
+.cpx-selbar .sep { width: 1px; height: 22px; margin: 0 3px; background: var(--line); }
+/* the distance measured */
+.cpx-measure { position: absolute; z-index: 6; padding: 3px 7px; border-radius: 6px; background: #1d2230; color: #fff; font-size: 12px; pointer-events: none; white-space: nowrap; }
+.cpx-measure[hidden] { display: none; }
+
+/* the rail of tabs, and its panel */
+.cpx-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: var(--panel); border-left: 1px solid var(--line); }
+.cpx-rail button { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; border-radius: 9px; border: 0; background: transparent; color: var(--muted); }
+.cpx-rail button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cpx-rail button[aria-pressed="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.cpx-side { padding: 0; }
+.cpx-pane { padding: 4px 0 24px; }
+.cpx-pane[hidden] { display: none; }
+.cpx-pane > h3 { margin: 0; padding: 14px 16px 6px; font-size: 14px; }
+.cpx-pane > .hint, .cpx-pane > label, .cpx-pane > div:not([hidden]) { margin-left: 16px; margin-right: 16px; }
+.cpx-pane > .hint[hidden] { display: none; }
+.cpx-pane > label.check { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
+.cpx-pane kbd { margin-left: auto; font: 600 10px/1 -apple-system, sans-serif; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
+/* the lettering: its box shown in the panel */
+#letterPane #textMenu { position: static !important; width: auto; box-shadow: none; border: 0; padding: 12px 16px; z-index: auto; }
+#letterPane #textMenu .cp-pal-head button { display: none; }
+.cpx-pane .cp-design { flex-direction: column; align-items: stretch; width: auto; border: 0; margin: 4px 0 8px; padding: 0; }
+.cpx-pane .cp-design div { justify-content: space-between; }
+@media (max-width: 900px) { .cpx { grid-template-columns: minmax(0, 1fr) 44px; } .cpx-side { display: none; } .cpx-side.open { display: block; position: fixed; right: 44px; top: 64px; bottom: 0; width: min(320px, 85vw); z-index: 20; } }
+.cpx-stage .pt-status { bottom: 60px; left: 12px; }
+/* zoom and undo stacked upright, so they keep clear of the tools */
+.cpx-zoom { flex-direction: column; }
+.cpx-zoom .sep { width: 22px; height: 1px; margin: 3px 0; }
+#toolZoomIn { order: 1; } #zoomN { order: 2; min-width: 0; } #toolZoomOut { order: 3; } #toolFit { order: 4; }
+.cpx-zoom .sep { order: 5; } #toolUndo { order: 6; } #toolRedo { order: 7; } #toolReset { order: 8; }
+.cpx-stage .pt-status { bottom: 14px; left: 64px; }
